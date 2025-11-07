@@ -12,6 +12,8 @@ const q = {
   get: readFileSync(join(SQL_DIR, 'get_book.sql'), 'utf8'),
   update: readFileSync(join(SQL_DIR, 'update_book.sql'), 'utf8'),
   softDelete: readFileSync(join(SQL_DIR, 'soft_delete_book.sql'), 'utf8'),
+  getCounters: readFileSync(join(SQL_DIR, 'get_book_counters.sql'), 'utf8'),
+  updateCounters: readFileSync(join(SQL_DIR, 'update_book_counters.sql'), 'utf8'),
 };
 
 async function createBook({ userId, title, totalPages, author, publisher, isbn }) {
@@ -42,10 +44,22 @@ async function softDeleteBook({ id, userId }) {
   return rows[0] || null;
 }
 
+async function getBookCounters({ id, userId }) {
+  const { rows } = await pool.query(q.getCounters, [id, userId]);
+  return rows[0] || null;
+}
+
+async function updateBookCounters({ id, userId, pagesRead, minutesTotal }) {
+  const { rows } = await pool.query(q.updateCounters, [id, userId, pagesRead, minutesTotal]);
+  return rows[0] || null;
+}
+
 export const bookRepository = {
   createBook,
   listBooks,
   getBook,
   updateBook,
   softDeleteBook,
+  getBookCounters,
+  updateBookCounters,
 };
