@@ -4,6 +4,8 @@ const ALLOWED = ['demo-1', 'demo-2', 'demo-3', 'demo-readonly'];
 
 export default function demoUser(req, _res, next) {
   const header = req.get('X-Demo-User');
-  req.demoUser = ALLOWED.includes(header) ? header : 'demo-1';
+  const user = ALLOWED.includes(header) ? header : 'demo-1';
+  req.demoUser = user;
+  req.isReadOnly = user === 'demo-readonly';
   next();
 }
