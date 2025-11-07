@@ -9,6 +9,7 @@ import { http } from './utils/http.js';
 import healthRouter from './routes/health.js';
 import meRouter from './routes/me.js';
 import booksRouter from './routes/books.js';
+import logsRouter from './routes/logs.js';
 
 const app = express();
 
@@ -27,6 +28,7 @@ app.use('/health', healthRouter);
 app.use('/api/me', meRouter);
 
 app.use('/api/books', booksRouter);
+app.use('/api/books', logsRouter);
 
 // 404 ハンドリング
 app.use((req, res) => http.notFound(res));

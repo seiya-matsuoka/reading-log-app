@@ -79,3 +79,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# アプリ(reading-log-app)用の指定
+!sql/queries/logs
