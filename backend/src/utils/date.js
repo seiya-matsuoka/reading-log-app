@@ -25,3 +25,18 @@ export function normalizeDateJstOrNull(s) {
   if (s == null || s === '') return null;
   return String(s);
 }
+
+// JSTの「本日」の Date オブジェクト（時分秒は 00:00:00）。
+export function jstToday() {
+  const now = new Date();
+  const s = now.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' });
+  const d = new Date(s);
+  // 00:00:00 に正規化
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+// 指定年月の暦日数を返す（西暦）。
+export function daysInMonth(year, month) {
+  // 1月を 0 として扱うため、翌月の0日で指定月の最終日を取得する
+  return new Date(year, month, 0).getDate();
+}
