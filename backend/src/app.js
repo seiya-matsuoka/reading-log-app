@@ -11,6 +11,7 @@ import meRouter from './routes/me.js';
 import booksRouter from './routes/books.js';
 import logsRouter from './routes/logs.js';
 import notesRouter from './routes/notes.js';
+import statsRouter from './routes/stats.js';
 
 const app = express();
 
@@ -33,6 +34,8 @@ app.use('/api/books', logsRouter);
 
 // Router で books or notes スコープに分岐する
 app.use('/api', notesRouter);
+
+app.use('/api', statsRouter);
 
 // 404 ハンドリング
 app.use((req, res) => http.notFound(res));
