@@ -85,7 +85,7 @@ async function deleteLatestLog(input) {
     minutesTotal: newMinutesTotal,
   });
 
-  return { deletedLog, book: updatedBook };
+  return { log: deletedLog, book: updatedBook };
 }
 
 export const logService = { createLog, listLogs, deleteLatestLog };
