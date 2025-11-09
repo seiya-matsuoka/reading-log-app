@@ -79,7 +79,7 @@ async function deleteLatestLog(req, res) {
 
   try {
     const result = await logService.deleteLatestLog({ bookId, userId: req.demoUser });
-    return http.ok(res, { id: result.deleted.id, book: result.book }, MSG.INFO_UNDO_DONE);
+    return http.ok(res, { id: result.log.id, book: result.book }, MSG.INFO_UNDO_DONE);
   } catch (e) {
     const m = e?.message;
     // 書籍かログが存在しない場合は 404
