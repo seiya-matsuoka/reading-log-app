@@ -1,1 +1,35 @@
 @import 'tailwindcss';
+
+/* デザイントークン。コンポーネントはこれを参照する（bg-bg / text-text / bg-primary-600 等） */
+@theme {
+  /* 実体は CSS 変数に委譲 */
+  --color-bg: var(--c-bg);
+  --color-surface: var(--c-surface);
+  --color-text: var(--c-text);
+  --color-muted: var(--c-muted);
+
+  --color-primary-50: var(--c-primary-50);
+  --color-primary-100: var(--c-primary-100);
+  --color-primary-500: var(--c-primary-500);
+  --color-primary-600: var(--c-primary-600);
+
+  --radius: 0.75rem;
+}
+
+/* デフォルトテーマ */
+:root {
+  --c-bg: #f7fbff;
+  --c-surface: #ffffff;
+  --c-text: #0f172a; /* slate-900 */
+  --c-muted: #64748b; /* slate-500~600 */
+
+  --c-primary-50: #eff6ff;
+  --c-primary-100: #dbeafe;
+  --c-primary-500: #60a5fa;
+  --c-primary-600: #3b82f6;
+}
+
+/* レイアウト補助 */
+.container {
+  max-width: 72rem;
+}
