@@ -34,7 +34,10 @@ export default [
       'react-hooks/exhaustive-deps': 'warn',
 
       // Fast Refresh
-      'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
+      'react-refresh/only-export-components': [
+        'warn',
+        { allowConstantExport: true, allowExportNames: ['useMe'] },
+      ],
 
       // JSXで使用した識別子を「使用」と見なす（no-unused-vars の誤検知を防止）
       'react/jsx-uses-vars': 'error',

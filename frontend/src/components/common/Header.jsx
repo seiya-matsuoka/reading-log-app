@@ -1,43 +1,31 @@
-import { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-
-const users = ['demo-1', 'demo-2', 'demo-3', 'demo-readonly'];
+import { NavLink, Link } from 'react-router-dom';
+import { useMe } from '../../providers/meContext.jsx';
 
 export default function Header() {
-  const location = useLocation();
-  const [user, setUser] = useState(localStorage.getItem('demoUser') || 'demo-1');
-
-  useEffect(() => {
-    localStorage.setItem('demoUser', user);
-  }, [user]);
+  const { me } = useMe();
+  const linkCls = (active) =>
+    `text-sm transition-colors hover:opacity-80 ${active ? 'font-semibold' : ''}`;
 
   return (
-    <header className="border-b bg-white">
+    <header className="bg-surface/95 border-b border-slate-200 backdrop-blur">
       <div className="container mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
-        <Link to="/books" className="font-semibold">
+        <Link to="/books" className="text-text font-semibold">
           Reading Log App
         </Link>
-
-        <nav className="flex items-center gap-3">
-          <Link
-            to="/books"
-            className={`text-sm ${location.pathname.startsWith('/books') ? 'font-semibold' : ''}`}
-          >
+        <nav className="flex items-center gap-4">
+          <NavLink to="/books" end className={({ isActive }) => linkCls(isActive)}>
             一覧
-          </Link>
-
-          <select
-            value={user}
-            onChange={(e) => setUser(e.target.value)}
-            className="ml-4 rounded border px-2 py-1 text-sm"
-            title="デモユーザー切替"
-          >
-            {users.map((u) => (
-              <option key={u} value={u}>
-                {u}
-              </option>
-            ))}
-          </select>
+          </NavLink>
+          <NavLink to="/books/new" className={({ isActive }) => linkCls(isActive)}>
+            新規書籍
+          </NavLink>
+          <NavLink to="/login" className={({ isActive }) => linkCls(isActive)}>
+            ログイン
+          </NavLink>
+          <NavLink to="/register" className={({ isActive }) => linkCls(isActive)}>
+            ユーザー登録
+          </NavLink>
+          <span className="text-muted ml-2 text-xs">{me ? me.name : '...'}</span>
         </nav>
       </div>
     </header>
