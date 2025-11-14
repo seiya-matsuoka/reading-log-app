@@ -3,7 +3,7 @@ export default function Button({ children, variant = 'primary', className = '', 
     'inline-flex items-center justify-center rounded-(--radius) px-3 py-2 text-sm transition';
   const styles =
     variant === 'ghost'
-      ? 'bg-surface border border-slate-200 text-text hover:bg-primary-50 shadow-sm'
+      ? 'bg-surface border border-border text-text hover:bg-primary-50 shadow-sm'
       : 'bg-primary-600 text-white hover:bg-primary-500 shadow-sm';
 
   return (
