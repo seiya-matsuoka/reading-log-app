@@ -20,6 +20,11 @@ WHERE
     $2 :: text IS NULL
     OR state = $2
   )
+  AND (
+    $3 :: text IS NULL
+    OR title ILIKE '%' || $3 || '%'
+    OR author ILIKE '%' || $3 || '%'
+  )
 ORDER BY
   CASE
     state
