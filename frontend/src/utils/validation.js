@@ -36,9 +36,16 @@ export function validateBookForm(form) {
     errors.title = MSG.FE.ERR.VALID.BOOK.TITLE_REQUIRED;
   }
 
-  const totalPagesInt = toPositiveInt(form.totalPages);
-  if (totalPagesInt == null) {
-    errors.totalPages = MSG.FE.ERR.VALID.BOOK.TOTAL_PAGES_POSITIVE;
+  let totalPagesInt = null;
+  // まず空かどうかをチェック（必須エラー）
+  if (form.totalPages === '' || form.totalPages == null) {
+    errors.totalPages = MSG.FE.ERR.VALID.BOOK.TOTAL_PAGES_REQUIRED;
+  } else {
+    totalPagesInt = toPositiveInt(form.totalPages);
+    if (totalPagesInt == null) {
+      // 値はあるが 1 未満 or 整数でない
+      errors.totalPages = MSG.FE.ERR.VALID.BOOK.TOTAL_PAGES_POSITIVE;
+    }
   }
 
   const author = sanitizeInput(form.author);
