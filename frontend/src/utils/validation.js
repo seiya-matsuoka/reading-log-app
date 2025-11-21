@@ -149,3 +149,31 @@ export function validateLogForm(form, options = {}) {
     },
   };
 }
+
+// メモフォームのバリデーション
+export function validateNoteForm(form) {
+  const errors = {};
+
+  // 入力値をサニタイズ
+  const rawBody = form.body ?? '';
+  const body = sanitizeInput(rawBody);
+
+  // 必須／文字数／リンク禁止 チェック
+  if (!body) {
+    errors.body = MSG.FE.ERR.VALID.NOTE.BODY_REQUIRED;
+  } else if (body.length > 500) {
+    errors.body = MSG.FE.ERR.VALID.NOTE.BODY_MAXLEN_500;
+  } else if (hasLink(body)) {
+    errors.body = MSG.FE.ERR.VALID.LINK_NOT_ALLOWED;
+  }
+
+  const ok = Object.keys(errors).length === 0;
+
+  return {
+    ok,
+    errors,
+    values: {
+      body,
+    },
+  };
+}
