@@ -12,6 +12,7 @@ export const MSG = Object.freeze({
       JSON_PARSE: 'サーバ応答の解析に失敗しました。',
       UNKNOWN: '不明なエラーが発生しました。',
       BOOKLIST: '書籍一覧の取得に失敗しました。',
+      BOOKDETAIL: '対象の書籍が見つかりません。',
 
       // 共通系（フォーム種別に依存しないもの）
       GENERAL_READONLY: '読み取り専用ユーザーのため、この操作は行えません。',
@@ -74,7 +75,7 @@ export const MSG = Object.freeze({
       // 空状態
       EMPTY: {
         BOOKS: '登録された書籍はありません。',
-        LOGS: 'まだ読書ログがありません。',
+        LOGS: '読書ログはまだありません。',
         NOTES: 'メモはまだありません。',
         STATS: 'この月の統計データはありません。',
       },
