@@ -1,11 +1,12 @@
+import { MSG } from '../utils/messages.js';
+
 export default function Register() {
   return (
-    <section className="mx-auto max-w-lg space-y-5">
-      <h1 className="text-xl font-semibold">ユーザー登録</h1>
-      <p className="text-muted text-sm">
-        デモアプリのため<span className="font-medium">ユーザーの新規登録はできない</span>
-        ようにしています。説明のみの仮ページです。
-      </p>
-    </section>
+    <div className="mx-auto max-w-md">
+      <div className="bg-surface border-border/40 rounded-(--radius) border p-6 shadow-sm">
+        <h1 className="mb-3 text-lg font-semibold">ユーザー登録（デモ）</h1>
+        <p className="text-muted mb-4 text-sm">{MSG.FE.UI.REGISTER.HELP}</p>
+      </div>
+    </div>
   );
 }
