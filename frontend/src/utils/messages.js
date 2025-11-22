@@ -103,7 +103,7 @@ export const MSG = Object.freeze({
 
     // 確認ダイアログ
     CONFIRM: {
-      DELETE_BOOK: 'この書籍を削除しますか？（ソフト削除）',
+      DELETE_BOOK: 'この書籍を削除しますか？',
       UNDO_LOG: '直前の読書ログを取り消しますか？',
       DELETE_NOTE: 'このメモを削除しますか？',
     },
