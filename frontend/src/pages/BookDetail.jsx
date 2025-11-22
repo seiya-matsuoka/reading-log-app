@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import Button from '../components/common/Button.jsx';
 import QuickUpdateForm from '../components/books/QuickUpdateForm.jsx';
 import BookForm from '../components/books/BookForm.jsx';
@@ -11,6 +11,7 @@ import { formatYmd } from '../utils/date.js';
 
 export default function BookDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { isReadOnly } = useMe();
 
   const [book, setBook] = useState(null);
@@ -20,6 +21,9 @@ export default function BookDetail() {
   const [loadError, setLoadError] = useState('');
   const [undoError, setUndoError] = useState('');
   const [isEditing, setIsEditing] = useState(false);
+
+  const [deleteError, setDeleteError] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -77,6 +81,28 @@ export default function BookDetail() {
 
   const handleCancelEdit = () => {
     setIsEditing(false);
+  };
+
+  // 書籍のソフト削除
+  const handleDeleteBook = async () => {
+    setDeleteError('');
+
+    if (isReadOnly) {
+      setDeleteError(MSG.FE.ERR.GENERAL_READONLY);
+      return;
+    }
+
+    if (!window.confirm(MSG.FE.CONFIRM.DELETE_BOOK)) return;
+
+    setDeleting(true);
+    try {
+      await api.delete(`/api/books/${book.id}`);
+      navigate('/books', { replace: true });
+    } catch (err) {
+      setDeleteError(err?.message || MSG.FE.ERR.GENERAL_SAVE_FAILED);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   // 直前のログ削除
@@ -139,15 +165,27 @@ export default function BookDetail() {
                     {book.updated_at ? formatYmd(book.updated_at) : '-'}
                   </p>
                 </div>
+
                 {!isReadOnly && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsEditing(true)}
-                  >
-                    編集
-                  </Button>
+                  <div className="flex flex-col items-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsEditing(true)}
+                    >
+                      編集
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      onClick={handleDeleteBook}
+                      disabled={deleting}
+                    >
+                      書籍を削除
+                    </Button>
+                  </div>
                 )}
               </div>
 
@@ -168,6 +206,8 @@ export default function BookDetail() {
               {isReadOnly && (
                 <p className="text-muted mt-3 text-xs">{MSG.FE.ERR.GENERAL_READONLY}</p>
               )}
+
+              {deleteError && <p className="text-destructive mt-2 text-xs">{deleteError}</p>}
             </>
           )}
         </section>
@@ -190,7 +230,7 @@ export default function BookDetail() {
             <h3 className="font-semibold">ログ履歴</h3>
             <Button
               type="button"
-              variant="ghost"
+              variant="destructive"
               size="sm"
               onClick={handleUndoLast}
               disabled={isReadOnly}
