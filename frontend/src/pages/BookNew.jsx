@@ -15,7 +15,7 @@ export default function BookNew() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <div className="bg-surface-1 border-border/40 rounded-(--radius) border p-6 shadow-sm">
+      <div className="bg-surface border-border/40 rounded-(--radius) border p-6 shadow-sm">
         <h1 className="mb-4 text-lg font-semibold">新規書籍登録</h1>
         <BookForm
           mode="create"
