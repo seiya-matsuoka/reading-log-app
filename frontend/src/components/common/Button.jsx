@@ -11,7 +11,9 @@ export default function Button({ children, variant = 'primary', className = '', 
   const styles =
     variant === 'ghost'
       ? 'bg-surface border border-border text-text hover:bg-primary-50 shadow-sm'
-      : 'bg-primary-600 text-white hover:bg-primary-500 shadow-sm';
+      : variant === 'destructive'
+        ? 'bg-surface text-danger-600 border border-danger-500 hover:bg-danger-50 shadow-sm'
+        : 'bg-primary-600 text-white hover:bg-primary-500 shadow-sm';
 
   return (
     <button className={`${base} ${styles} ${className}`} {...props}>
