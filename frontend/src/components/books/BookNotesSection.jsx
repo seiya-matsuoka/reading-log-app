@@ -228,7 +228,7 @@ export default function BookNotesSection({ bookId, isReadOnly }) {
                             <Button
                               type="button"
                               size="xs"
-                              variant="ghost"
+                              variant="destructive"
                               onClick={() => handleDelete(n.id)}
                               disabled={rowSaving}
                             >
