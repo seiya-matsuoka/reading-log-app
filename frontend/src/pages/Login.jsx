@@ -37,8 +37,15 @@ export default function Login() {
         <p className="text-muted mb-4 text-sm">{MSG.FE.UI.LOGIN.HELP}</p>
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
-            <label className="mb-1 block text-sm">ユーザー</label>
-            <Select value={user} onChange={(e) => setUser(e.target.value)}>
+            <label htmlFor="login-user" className="mb-1 block text-sm">
+              ユーザー
+            </label>
+            <Select
+              id="login-user"
+              value={user}
+              disabled={saving}
+              onChange={(e) => setUser(e.target.value)}
+            >
               {OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
@@ -46,9 +53,11 @@ export default function Login() {
               ))}
             </Select>
           </div>
-          <Button type="submit" disabled={saving} loading={saving} className="w-full">
-            ログイン
-          </Button>
+          <div className="text-center">
+            <Button type="submit" disabled={saving} loading={saving} className="min-w-[120px]">
+              ログイン
+            </Button>
+          </div>
         </form>
       </div>
     </div>
