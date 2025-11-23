@@ -1,4 +1,13 @@
-export default function Button({ children, variant = 'primary', className = '', ...props }) {
+import Spinner from './Spinner.jsx';
+
+export default function Button({
+  children,
+  variant = 'primary',
+  className = '',
+  loading = false,
+  disabled = false,
+  ...props
+}) {
   const base = [
     'inline-flex items-center justify-center rounded-(--radius) px-3 py-2 text-sm',
     'transition',
@@ -15,9 +24,17 @@ export default function Button({ children, variant = 'primary', className = '', 
         ? 'bg-surface text-danger-600 border border-danger-500 hover:bg-danger-50 shadow-sm'
         : 'bg-primary-600 text-white hover:bg-primary-500 shadow-sm';
 
+  const isDisabled = disabled || loading;
+
   return (
-    <button className={`${base} ${styles} ${className}`} {...props}>
-      {children}
+    <button
+      className={`${base} ${styles} ${className}`}
+      disabled={isDisabled}
+      aria-busy={loading || undefined}
+      {...props}
+    >
+      {loading && <Spinner className={children ? 'mr-2' : ''} />}
+      <span>{children}</span>
     </button>
   );
 }
