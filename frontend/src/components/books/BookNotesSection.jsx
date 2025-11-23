@@ -200,6 +200,7 @@ export default function BookNotesSection({ bookId, isReadOnly }) {
                               type="button"
                               size="xs"
                               onClick={() => handleSaveEdit(n.id)}
+                              loading={rowSaving}
                               disabled={rowSaving}
                             >
                               保存
@@ -230,6 +231,7 @@ export default function BookNotesSection({ bookId, isReadOnly }) {
                               size="xs"
                               variant="destructive"
                               onClick={() => handleDelete(n.id)}
+                              loading={rowSaving}
                               disabled={rowSaving}
                             >
                               削除

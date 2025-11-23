@@ -19,6 +19,7 @@ export default function BookDetail() {
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [undoing, setUndoing] = useState(false);
   const [undoError, setUndoError] = useState('');
   const [isEditing, setIsEditing] = useState(false);
 
@@ -116,11 +117,14 @@ export default function BookDetail() {
 
     if (!window.confirm(MSG.FE.CONFIRM.UNDO_LOG)) return;
 
+    setUndoing(true);
     try {
       await api.delete(`/api/books/${book.id}/logs/last`);
       await fetchAll();
     } catch (err) {
       setUndoError(err?.message || MSG.FE.ERR.GENERAL_SAVE_FAILED);
+    } finally {
+      setUndoing(false);
     }
   };
 
@@ -181,6 +185,7 @@ export default function BookDetail() {
                       variant="destructive"
                       size="sm"
                       onClick={handleDeleteBook}
+                      loading={deleting}
                       disabled={deleting}
                     >
                       書籍を削除
@@ -233,7 +238,8 @@ export default function BookDetail() {
               variant="destructive"
               size="sm"
               onClick={handleUndoLast}
-              disabled={isReadOnly}
+              loading={undoing}
+              disabled={isReadOnly || undoing}
             >
               直前のログを削除
             </Button>
