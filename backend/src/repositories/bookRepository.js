@@ -22,8 +22,8 @@ async function createBook({ userId, title, totalPages, author, publisher, isbn }
   return rows[0];
 }
 
-async function listBooks({ userId, state }) {
-  const { rows } = await pool.query(q.list, [userId, state || null]);
+async function listBooks({ userId, state, keyword }) {
+  const { rows } = await pool.query(q.list, [userId, state || null, keyword || null]);
   return rows;
 }
 

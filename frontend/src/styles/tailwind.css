@@ -2,31 +2,63 @@
 
 /* デザイントークン。コンポーネントはこれを参照する（bg-bg / text-text / bg-primary-600 等） */
 @theme {
-  /* 実体は CSS 変数に委譲 */
+  /* ベース */
   --color-bg: var(--c-bg);
   --color-surface: var(--c-surface);
+  --color-surface-1: var(--c-surface-1);
+  --color-surface-2: var(--c-surface-2);
+  --color-surface-3: var(--c-surface-3);
+
   --color-text: var(--c-text);
   --color-muted: var(--c-muted);
 
+  /* 枠線 */
+  --color-border: var(--c-border);
+
+  /* プライマリ */
+  --color-primary: var(--c-primary-600); /* ベース */
   --color-primary-50: var(--c-primary-50);
   --color-primary-100: var(--c-primary-100);
   --color-primary-500: var(--c-primary-500);
   --color-primary-600: var(--c-primary-600);
 
+  /* セマンティック */
+  --color-danger: var(--c-danger-600);
+  --color-danger-50: var(--c-danger-50);
+  --color-danger-100: var(--c-danger-100);
+  --color-danger-500: var(--c-danger-500);
+  --color-danger-600: var(--c-danger-600);
+  --color-destructive: var(--c-danger-600);
+
+  /* 角丸トークン */
   --radius: 0.75rem;
 }
 
-/* デフォルトテーマ */
+/* デフォルトテーマ（淡いブルー基調） */
 :root {
+  /* 背景 */
   --c-bg: #f7fbff;
   --c-surface: #ffffff;
-  --c-text: #0f172a; /* slate-900 */
-  --c-muted: #64748b; /* slate-500~600 */
+  --c-surface-1: #f8fbff; /* ほんのり明るい */
+  --c-surface-2: #f1f7ff; /* 少し強 */
+  --c-surface-3: #e9f2ff; /* 強 */
 
+  /* テキスト/補助/枠線 */
+  --c-text: #0f172a; /* slate-900 */
+  --c-muted: #64748b; /* slate-500〜600 */
+  --c-border: #e2e8f0; /* slate-200 */
+
+  /* primary（ブルー系） */
   --c-primary-50: #eff6ff;
   --c-primary-100: #dbeafe;
   --c-primary-500: #60a5fa;
-  --c-primary-600: #3b82f6;
+  --c-primary-600: #3b82f6; /* text-primary / bg-primary の基準色 */
+
+  /* Danger（赤系） */
+  --c-danger-50: #fef2f2;
+  --c-danger-100: #fee2e2;
+  --c-danger-500: #ef4444;
+  --c-danger-600: #dc2626;
 }
 
 /* レイアウト補助 */

@@ -34,7 +34,15 @@ async function createBook(req, res) {
 
 async function listBooks(req, res) {
   const st = req.query.state === 'reading' || req.query.state === 'done' ? req.query.state : null;
-  const rows = await bookService.listBooks({ userId: req.demoUser, state: st });
+
+  const keywordRaw = typeof req.query.keyword === 'string' ? req.query.keyword : '';
+  const keyword = keywordRaw.trim() || null; // 空文字なら null
+
+  const rows = await bookService.listBooks({
+    userId: req.demoUser,
+    state: st,
+    keyword,
+  });
   // 取得データが空の場合は message を付与
   return http.ok(res, rows, rows.length ? undefined : MSG.INFO_NO_RESULTS);
 }

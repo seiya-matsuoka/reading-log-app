@@ -6,16 +6,20 @@ const MeContext = createContext({
   loading: true,
   reload: async () => {},
   loginAs: async (_user) => {},
+  isReadOnly: false,
 });
 
-export function UserProvider({ children }) {
+export function MeProvider({ children }) {
   const [me, setMe] = useState(null);
   const [loading, setLoading] = useState(true);
 
   async function fetchMe() {
     try {
-      const res = await api.get('/api/me');
-      setMe(res.data || null);
+      const data = await api.get('/api/me');
+      setMe(data || null);
+    } catch (e) {
+      console.warn('GET /api/me failed:', e);
+      setMe(null);
     } finally {
       setLoading(false);
     }
@@ -37,7 +41,17 @@ export function UserProvider({ children }) {
   };
 
   return (
-    <MeContext.Provider value={{ me, loading, reload, loginAs }}>{children}</MeContext.Provider>
+    <MeContext.Provider
+      value={{
+        me,
+        loading,
+        reload,
+        loginAs,
+        isReadOnly: !!me?.isReadOnly, // me が null の間も false を返す
+      }}
+    >
+      {children}
+    </MeContext.Provider>
   );
 }
 
