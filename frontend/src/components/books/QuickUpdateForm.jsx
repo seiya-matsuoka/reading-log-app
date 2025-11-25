@@ -192,8 +192,9 @@ export default function QuickUpdateForm({ bookId, totalPages, onSaved }) {
         {errors.memo && <FormFieldError message={errors.memo} className="mt-1" />}
       </div>
 
-      {/* ボタン */}
-      <div className="flex justify-end pt-1 sm:col-span-2">
+      {/* リンク禁止文言とボタン */}
+      <div className="flex justify-between pt-1 sm:col-span-2">
+        <p className="text-muted mt-1 text-xs">{MSG.FE.UI.NOTE.LINK_NOTICE}</p>
         <Button type="submit" loading={saving} disabled={isDisabled}>
           進捗を保存
         </Button>

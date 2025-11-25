@@ -270,6 +270,9 @@ export default function BookNotesSection({ bookId, isReadOnly }) {
           <p className="text-muted text-sm">{MSG.FE.UI.EMPTY.NOTES}</p>
         )}
       </div>
+
+      {/* リンク禁止文言 */}
+      <p className="text-muted mt-3 text-xs">{MSG.FE.UI.NOTE.LINK_NOTICE}</p>
     </section>
   );
 }
