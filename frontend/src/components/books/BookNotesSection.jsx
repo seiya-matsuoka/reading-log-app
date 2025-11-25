@@ -10,8 +10,11 @@ import { api } from '../../lib/api.js';
 import { MSG } from '../../utils/messages.js';
 import { formatYmd } from '../../utils/date.js';
 import { validateNoteForm } from '../../utils/validation.js';
+import { useToast } from '../../providers/toastContext.js';
 
 export default function BookNotesSection({ bookId, isReadOnly }) {
+  const { showToast } = useToast();
+
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -68,6 +71,12 @@ export default function BookNotesSection({ bookId, isReadOnly }) {
     setSaving(true);
     try {
       await api.post(`/api/books/${bookId}/notes`, result.values);
+
+      const msg = api.getLastMessage();
+      if (msg) {
+        showToast({ type: 'success', message: msg });
+      }
+
       setForm({ body: '' });
       await fetchNotes();
     } catch (err) {
@@ -108,6 +117,12 @@ export default function BookNotesSection({ bookId, isReadOnly }) {
     setRowSaving(true);
     try {
       await api.patch(`/api/notes/${noteId}`, result.values);
+
+      const msg = api.getLastMessage();
+      if (msg) {
+        showToast({ type: 'success', message: msg });
+      }
+
       setEditingId(null);
       setEditingBody('');
       await fetchNotes();
@@ -126,6 +141,12 @@ export default function BookNotesSection({ bookId, isReadOnly }) {
     setRowSaving(true);
     try {
       await api.delete(`/api/notes/${noteId}`);
+
+      const msg = api.getLastMessage();
+      if (msg) {
+        showToast({ type: 'success', message: msg });
+      }
+
       await fetchNotes();
     } catch (err) {
       setLoadError(err?.message || MSG.FE.ERR.GENERAL_SAVE_FAILED);

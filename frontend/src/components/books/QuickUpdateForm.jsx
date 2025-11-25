@@ -7,10 +7,13 @@ import { jstToday } from '../../utils/date.js';
 import { MSG } from '../../utils/messages.js';
 import { validateLogForm } from '../../utils/validation.js';
 import { useMe } from '../../providers/meContext.jsx';
+import { useToast } from '../../providers/toastContext.js';
 
 export default function QuickUpdateForm({ bookId, totalPages, onSaved }) {
   const { me } = useMe() ?? {};
   const isReadOnly = !!me?.isReadOnly;
+
+  const { showToast } = useToast();
 
   const [form, setForm] = useState({
     cumulativePages: '',
@@ -94,6 +97,12 @@ export default function QuickUpdateForm({ bookId, totalPages, onSaved }) {
     try {
       // 正規化済みの値をそのまま API に送信
       await api.post(`/api/books/${bookId}/logs`, result.values);
+
+      const msg = api.getLastMessage();
+      if (msg) {
+        showToast({ type: 'success', message: msg });
+      }
+
       resetForm();
       onSaved?.();
     } catch (err) {
