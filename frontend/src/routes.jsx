@@ -4,6 +4,7 @@ import Register from './pages/Register.jsx';
 import BooksList from './pages/BooksList.jsx';
 import BookNew from './pages/BookNew.jsx';
 import BookDetail from './pages/BookDetail.jsx';
+import NotFound from './pages/NotFound.jsx';
 
 export function AppRoutes() {
   const routes = useRoutes([
@@ -13,7 +14,7 @@ export function AppRoutes() {
     { path: '/books', element: <BooksList /> },
     { path: '/books/new', element: <BookNew /> },
     { path: '/books/:id', element: <BookDetail /> },
-    { path: '*', element: <div className="text-muted text-sm">ページが見つかりません。</div> },
+    { path: '*', element: <NotFound /> },
   ]);
   return routes;
 }
