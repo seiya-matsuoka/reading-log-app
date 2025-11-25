@@ -172,9 +172,11 @@ export default function BookNotesSection({ bookId, isReadOnly }) {
           />
           {fieldErrors.body && <FormFieldError message={fieldErrors.body} />}
         </div>
-        <Button type="submit" loading={saving} disabled={saving || isReadOnly}>
-          追加
-        </Button>
+        <div className="flex justify-end sm:block">
+          <Button type="submit" loading={saving} disabled={saving || isReadOnly}>
+            追加
+          </Button>
+        </div>
       </form>
       {formError && <p className="text-destructive mt-1 text-xs">{formError}</p>}
 
