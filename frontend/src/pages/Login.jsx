@@ -34,7 +34,12 @@ export default function Login() {
     <div className="mx-auto max-w-md">
       <div className="bg-surface border-border/40 rounded-(--radius) border p-6 shadow-sm">
         <h1 className="mb-3 text-lg font-semibold">ログイン（デモ）</h1>
-        <p className="text-muted mb-4 text-sm">{MSG.FE.UI.LOGIN.HELP}</p>
+
+        {/* 説明文 */}
+        <p className="text-muted mb-1 text-sm">{MSG.FE.UI.LOGIN.HELP}</p>
+        <p className="text-muted mb-1 text-xs">{MSG.FE.UI.DEMO.NOTICE}</p>
+        <p className="text-muted mb-4 text-xs">{MSG.FE.UI.NOTE.LINK_NOTICE}</p>
+
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
             <label htmlFor="login-user" className="mb-1 block text-sm">
