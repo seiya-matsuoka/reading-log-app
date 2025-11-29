@@ -10,8 +10,11 @@ import { api } from '../../lib/api.js';
 import { MSG } from '../../utils/messages.js';
 import { formatYmd } from '../../utils/date.js';
 import { validateNoteForm } from '../../utils/validation.js';
+import { useToast } from '../../providers/toastContext.js';
 
 export default function BookNotesSection({ bookId, isReadOnly }) {
+  const { showToast } = useToast();
+
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -68,6 +71,12 @@ export default function BookNotesSection({ bookId, isReadOnly }) {
     setSaving(true);
     try {
       await api.post(`/api/books/${bookId}/notes`, result.values);
+
+      const msg = api.getLastMessage();
+      if (msg) {
+        showToast({ type: 'success', message: msg });
+      }
+
       setForm({ body: '' });
       await fetchNotes();
     } catch (err) {
@@ -108,6 +117,12 @@ export default function BookNotesSection({ bookId, isReadOnly }) {
     setRowSaving(true);
     try {
       await api.patch(`/api/notes/${noteId}`, result.values);
+
+      const msg = api.getLastMessage();
+      if (msg) {
+        showToast({ type: 'success', message: msg });
+      }
+
       setEditingId(null);
       setEditingBody('');
       await fetchNotes();
@@ -126,6 +141,12 @@ export default function BookNotesSection({ bookId, isReadOnly }) {
     setRowSaving(true);
     try {
       await api.delete(`/api/notes/${noteId}`);
+
+      const msg = api.getLastMessage();
+      if (msg) {
+        showToast({ type: 'success', message: msg });
+      }
+
       await fetchNotes();
     } catch (err) {
       setLoadError(err?.message || MSG.FE.ERR.GENERAL_SAVE_FAILED);
@@ -151,9 +172,11 @@ export default function BookNotesSection({ bookId, isReadOnly }) {
           />
           {fieldErrors.body && <FormFieldError message={fieldErrors.body} />}
         </div>
-        <Button type="submit" loading={saving} disabled={saving || isReadOnly}>
-          追加
-        </Button>
+        <div className="flex justify-end sm:block">
+          <Button type="submit" loading={saving} disabled={saving || isReadOnly}>
+            追加
+          </Button>
+        </div>
       </form>
       {formError && <p className="text-destructive mt-1 text-xs">{formError}</p>}
 
@@ -200,6 +223,7 @@ export default function BookNotesSection({ bookId, isReadOnly }) {
                               type="button"
                               size="xs"
                               onClick={() => handleSaveEdit(n.id)}
+                              loading={rowSaving}
                               disabled={rowSaving}
                             >
                               保存
@@ -230,6 +254,7 @@ export default function BookNotesSection({ bookId, isReadOnly }) {
                               size="xs"
                               variant="destructive"
                               onClick={() => handleDelete(n.id)}
+                              loading={rowSaving}
                               disabled={rowSaving}
                             >
                               削除
@@ -247,6 +272,9 @@ export default function BookNotesSection({ bookId, isReadOnly }) {
           <p className="text-muted text-sm">{MSG.FE.UI.EMPTY.NOTES}</p>
         )}
       </div>
+
+      {/* リンク禁止文言 */}
+      <p className="text-muted mt-3 text-xs">{MSG.FE.UI.NOTE.LINK_NOTICE}</p>
     </section>
   );
 }

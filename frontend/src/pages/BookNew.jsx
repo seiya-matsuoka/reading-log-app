@@ -2,14 +2,22 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useMe } from '../providers/meContext.jsx';
 import BookForm from '../components/books/BookForm.jsx';
+import { useToast } from '../providers/toastContext.js';
 
 export default function BookNew() {
   const nav = useNavigate();
   const { isReadOnly } = useMe();
+  const { showToast } = useToast();
 
   async function handleCreate(values) {
     // values： { title, total_pages, author, publisher, isbn }
     await api.post('/api/books', values);
+
+    const msg = api.getLastMessage();
+    if (msg) {
+      showToast({ type: 'success', message: msg });
+    }
+
     nav('/books');
   }
 

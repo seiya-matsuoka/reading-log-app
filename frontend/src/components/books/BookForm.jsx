@@ -210,7 +210,7 @@ export default function BookForm({
         >
           {cancelLabel}
         </Button>
-        <Button type="submit" disabled={isDisabled} className="min-w-[120px]">
+        <Button type="submit" loading={saving} disabled={isDisabled} className="min-w-[120px]">
           {submitLabel}
         </Button>
       </div>
