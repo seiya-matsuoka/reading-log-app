@@ -113,6 +113,9 @@ export const MSG = Object.freeze({
       LOADING: {
         DEFAULT: '読み込み中…',
         STATS: '統計を取得中…',
+        SLOW_BOOT_TITLE: 'サーバーを起動しています…',
+        SLOW_BOOT_DETAIL:
+          'しばらくアクセスがなかった場合は、サーバー起動のため初回の読み込みに数十秒かかることがあります。このまま画面を閉じずにお待ちください。',
       },
     },
 

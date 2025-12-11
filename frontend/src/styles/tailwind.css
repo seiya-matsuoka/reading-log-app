@@ -65,3 +65,32 @@
 .container {
   max-width: 72rem;
 }
+
+/* Skeleton shimmer effect */
+.skeleton-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transform: translateX(-100%);
+
+  background-image: linear-gradient(
+    120deg,
+    rgba(148, 163, 184, 0),
+    rgba(148, 163, 184, 0.25),
+    rgba(148, 163, 184, 0)
+  );
+
+  animation: shimmer 1.5s linear infinite;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
