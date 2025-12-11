@@ -4,6 +4,7 @@ import Button from '../components/common/Button.jsx';
 import QuickUpdateForm from '../components/books/QuickUpdateForm.jsx';
 import BookForm from '../components/books/BookForm.jsx';
 import BookNotesSection from '../components/books/BookNotesSection.jsx';
+import PageLoading from '../components/common/PageLoading.jsx';
 import { api } from '../lib/api.js';
 import { useMe } from '../providers/meContext.jsx';
 import { MSG } from '../utils/messages.js';
@@ -53,7 +54,7 @@ export default function BookDetail() {
 
   // ローディング
   if (loading) {
-    return <p className="text-muted text-sm">{MSG.FE.UI.LOADING.DEFAULT}</p>;
+    return <PageLoading variant="detail" />;
   }
 
   // ロードエラー

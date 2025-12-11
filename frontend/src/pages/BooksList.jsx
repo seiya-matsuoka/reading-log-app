@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 import { useMe } from '../providers/meContext.jsx';
 import SearchBar from '../components/books/SearchBar.jsx';
 import StatsBar from '../components/books/StatsBar.jsx';
 import BookCard from '../components/books/BookCard.jsx';
-import SkeletonCard from '../components/common/SkeletonCard.jsx';
+import PageLoading from '../components/common/PageLoading.jsx';
 import { jstToday } from '../utils/date.js';
 import { MSG } from '../utils/messages.js';
 
@@ -50,8 +50,6 @@ export default function BooksList() {
     }
   }, [meLoading, fetchAll]);
 
-  const skeletons = useMemo(() => new Array(6).fill(0), []);
-
   return (
     <div className="space-y-4">
       <SearchBar
@@ -64,14 +62,7 @@ export default function BooksList() {
       <StatsBar ym={ym} onChangeYm={setYm} />
 
       {loading ? (
-        <div className="space-y-3">
-          <p className="text-muted text-sm">{MSG.FE.UI.LOADING.DEFAULT}</p>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {skeletons.map((_, i) => (
-              <SkeletonCard key={i} />
-            ))}
-          </div>
-        </div>
+        <PageLoading variant="list" />
       ) : error ? (
         <div className="bg-destructive/10 border-destructive/40 text-destructive rounded-(--radius) border p-4 text-sm">
           <p className="mb-1 font-semibold">{MSG.FE.ERR.BOOKLIST}</p>
