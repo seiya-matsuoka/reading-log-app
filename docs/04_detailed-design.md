@@ -19,114 +19,165 @@
 
 ---
 
-## 1. リポジトリ構成（モノレポ）
+## 1. リポジトリ構成（実装版）
+
+### 1.1 全体構成
+
 ```
 reading-log-app/
-├─ README.md
-├─ .gitignore
-├─ .nvmrc                        # Nodeバージョン固定（例: v20.x）
-├─ docs/                         # 設計書（本ファイルなど）
 ├─ backend/
-│  ├─ package.json
+│  ├─ scripts/
+│  │  ├─ migrate.js
+│  │  └─ seed.js
+│  ├─ sql/
+│  │  ├─ migrations/
+│  │  │  └─ 0001_init.sql
+│  │  ├─ queries/
+│  │  │  ├─ books/
+│  │  │  │  ├─ get_book_counters.sql
+│  │  │  │  ├─ get_book.sql
+│  │  │  │  ├─ insert_book.sql
+│  │  │  │  ├─ list_books.sql
+│  │  │  │  ├─ soft_delete_book.sql
+│  │  │  │  ├─ update_book_counters.sql
+│  │  │  │  └─ update_book.sql
+│  │  │  ├─ logs/
+│  │  │  │  ├─ delete_latest_log.sql
+│  │  │  │  ├─ get_latest_log.sql
+│  │  │  │  ├─ insert_log.sql
+│  │  │  │  └─ list_logs.sql
+│  │  │  ├─ notes/
+│  │  │  │  ├─ delete_note.sql
+│  │  │  │  ├─ get_note.sql
+│  │  │  │  ├─ insert_note.sql
+│  │  │  │  ├─ list_notes.sql
+│  │  │  │  └─ update_note.sql
+│  │  │  └─ stats/
+│  │  │     └─ get_monthly_pages.sql
+│  │  └─ seeds/
+│  │     ├─ 0000_reset_all.sql
+│  │     ├─ 0001_demo_users.sql
+│  │     ├─ 0002_demo_books.sql
+│  │     ├─ 0003_demo_reading_logs.sql
+│  │     └─ 0004_demo_notes.sql
 │  ├─ src/
-│  │  ├─ index.js               # 起動エントリ（listen）
-│  │  ├─ app.js                 # Expressインスタンス生成・共通MW
-│  │  ├─ routes/
-│  │  │  ├─ me.js
-│  │  │  ├─ books.js            # /api/books, /api/books/:id
-│  │  │  ├─ logs.js             # /api/books/:id/logs, /api/logs/:logId
-│  │  │  ├─ notes.js            # /api/books/:id/notes, /api/notes/:noteId
-│  │  │  └─ stats.js            # /api/stats
+│  │  ├─ config/
+│  │  │  └─ env.js
 │  │  ├─ controllers/
-│  │  │  ├─ meController.js
 │  │  │  ├─ bookController.js
 │  │  │  ├─ logController.js
 │  │  │  ├─ noteController.js
 │  │  │  └─ statsController.js
-│  │  ├─ services/
-│  │  │  ├─ bookService.js      # 累計→差分計算・状態自動遷移
-│  │  │  ├─ logService.js       # 直前ログUndo、巻き戻し
-│  │  │  ├─ noteService.js
-│  │  │  └─ statsService.js
+│  │  ├─ db/
+│  │  │  └─ pool.js
+│  │  ├─ middleware/
+│  │  │  ├─ cors.js
+│  │  │  ├─ demoUser.js
+│  │  │  ├─ errorHandler.js
+│  │  │  └─ readonlyGuard.js
 │  │  ├─ repositories/
 │  │  │  ├─ bookRepository.js
 │  │  │  ├─ logRepository.js
 │  │  │  ├─ noteRepository.js
-│  │  │  └─ userRepository.js
-│  │  ├─ db/
-│  │  │  ├─ pool.js             # pg Pool生成（pooled接続文字列）
-│  │  │  └─ tx.js               # トランザクションヘルパ（任意）
-│  │  ├─ middleware/
-│  │  │  ├─ cors.js
-│  │  │  ├─ demoUser.js         # X-Demo-Userの解決（初回はdemo-1固定）
-│  │  │  ├─ readonlyGuard.js    # 書込み系で読み取り専用を403に
-│  │  │  └─ errorHandler.js     # 例外→{messageId}で整形
+│  │  │  └─ statsRepository.js
+│  │  ├─ routes/
+│  │  │  ├─ books.js
+│  │  │  ├─ health.js
+│  │  │  ├─ logs.js
+│  │  │  ├─ me.js
+│  │  │  ├─ notes.js
+│  │  │  └─ stats.js
+│  │  ├─ services/
+│  │  │  ├─ bookService.js
+│  │  │  ├─ logService.js
+│  │  │  ├─ noteService.js
+│  │  │  └─ statsService.js
 │  │  ├─ utils/
-│  │  │  ├─ validate.js         # NFKC・リンク禁止・範囲チェック
-│  │  │  ├─ messages.js         # messageId定義（Back側参照用）
-│  │  │  └─ date.js             # JST解釈/UTC保存補助（必要なら）
-│  │  └─ config/
-│  │     └─ env.js              # 環境変数読取（DATABASE_URL_POOLED等）
-│  └─ sql/
-│     ├─ migrations/
-│     │  ├─ 0001_init.sql
-│     │  └─ 0002_indexes.sql
-│     └─ queries/
-│        ├─ books/
-│        │  ├─ insert_book.sql
-│        │  ├─ get_book_by_id.sql
-│        │  ├─ list_books_by_user.sql
-│        │  ├─ update_book.sql
-│        │  └─ soft_delete_book.sql
-│        ├─ logs/
-│        │  ├─ insert_log.sql
-│        │  ├─ list_logs_by_book.sql
-│        │  └─ delete_log_by_id.sql
-│        ├─ notes/
-│        │  ├─ insert_note.sql
-│        │  ├─ list_notes_by_book.sql
-│        │  └─ delete_note_by_id.sql
-│        └─ stats/
-│           └─ monthly_pages.sql
-└─ frontend/
-   ├─ package.json
-   ├─ index.html
-   ├─ vite.config.js
-   ├─ postcss.config.js
-   ├─ tailwind.config.js
-   └─ src/
-      ├─ main.jsx
-      ├─ App.jsx
-      ├─ routes.jsx              # React Router定義
-      ├─ pages/
-      │  ├─ Login.jsx
-      │  ├─ Register.jsx
-      │  ├─ BooksList.jsx
-      │  ├─ BookNew.jsx
-      │  └─ BookDetail.jsx
-      ├─ components/
-      │  ├─ common/
-      │  │  ├─ Header.jsx
-      │  │  ├─ Button.jsx
-      │  │  ├─ Input.jsx
-      │  │  ├─ Select.jsx
-      │  │  ├─ Spinner.jsx
-      │  │  ├─ SkeletonCard.jsx
-      │  │  └─ FormFieldError.jsx
-      │  └─ books/
-      │     ├─ BookCard.jsx
-      │     ├─ QuickUpdateForm.jsx
-      │     ├─ SearchBar.jsx
-      │     └─ StatsBar.jsx
-      ├─ lib/
-      │  └─ api.js               # fetch薄ラッパ
-      ├─ messages/
-      │  └─ messages.json        # messageId→日本語
-      ├─ utils/
-      │  ├─ date.js              # JST表示、YYYY/MM/DD
-      │  └─ sanitize.js          # NFKC/ゼロ幅除去/URL検知
-      └─ styles/
-         └─ tailwind.css
+│  │  │  ├─ date.js
+│  │  │  ├─ http.js
+│  │  │  ├─ messages.js
+│  │  │  └─ validation.js
+│  │  ├─ app.js
+│  │  └─ index.js
+│  ├─ .env
+│  ├─ .env.example
+│  ├─ .gitignore
+│  ├─ .prettierignore
+│  ├─ .prettierrc
+│  ├─ eslint.config.mjs
+│  ├─ package-lock.json
+│  └─ package.json
+├─ docs/
+│  ├─ 00_docs-index.md
+│  ├─ 01_spec-summary.md
+│  ├─ 02_requirements.md
+│  ├─ 03_basic-design.md
+│  └─ 04_detailed-design.md
+├─ frontend/
+│  ├─ public/
+│  │  ├─ ogp/
+│  │  │  ├─ reading-log-app-og-1200x630.png
+│  │  │  └─ reading-log-app-og-1200x1200.png
+│  │  ├─ android-chrome-192x192.png
+│  │  ├─ android-chrome-512x512.png
+│  │  ├─ apple-touch-icon.png
+│  │  ├─ favicon-16x16.png
+│  │  ├─ favicon-32x32.png
+│  │  ├─ favicon.ico
+│  │  └─ site.webmanifest
+│  ├─ src/
+│  │  ├─ components/
+│  │  │  ├─ books/
+│  │  │  │  ├─ BookCard.jsx
+│  │  │  │  ├─ BookForm.jsx
+│  │  │  │  ├─ BookNotesSection.jsx
+│  │  │  │  ├─ QuickUpdateForm.jsx
+│  │  │  │  ├─ SearchBar.jsx
+│  │  │  │  └─ StatsBar.jsx
+│  │  │  └─ common/
+│  │  │     ├─ Button.jsx
+│  │  │     ├─ FormFieldError.jsx
+│  │  │     ├─ Header.jsx
+│  │  │     ├─ Input.jsx
+│  │  │     ├─ PageLoading.jsx
+│  │  │     ├─ Select.jsx
+│  │  │     ├─ SkeletonCard.jsx
+│  │  │     └─ Spinner.jsx
+│  │  ├─ lib/
+│  │  │  └─ api.js
+│  │  ├─ pages/
+│  │  │  ├─ BookDetail.jsx
+│  │  │  ├─ BookNew.jsx
+│  │  │  ├─ BooksList.jsx
+│  │  │  ├─ Login.jsx
+│  │  │  ├─ NotFound.jsx
+│  │  │  └─ Register.jsx
+│  │  ├─ providers/
+│  │  │  ├─ meContext.jsx
+│  │  │  ├─ toastContext.js
+│  │  │  └─ ToastProvider.jsx
+│  │  ├─ styles/
+│  │  │  └─ tailwind.css
+│  │  ├─ utils/
+│  │  │  ├─ date.js
+│  │  │  ├─ messages.js
+│  │  │  ├─ sanitize.js
+│  │  │  └─ validation.js
+│  │  ├─ App.jsx
+│  │  ├─ main.jsx
+│  │  └─ routes.jsx
+│  ├─ .env
+│  ├─ .gitignore
+│  ├─ .prettierignore
+│  ├─ .prettierrc
+│  ├─ eslint.config.mjs
+│  ├─ index.html
+│  ├─ package-lock.json
+│  ├─ package.json
+│  ├─ vercel.json
+│  └─ vite.config.js
+├─ .gitignore
+└─ README.md
 ```
 
 ### 役割と責務（要約）
