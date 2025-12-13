@@ -233,45 +233,63 @@
 
 ### users
 
-- `id` (PK, bigint)
-- `name` (text)
-- `is_readonly` (boolean)
-- `created_at` (timestamp with time zone)
+- `id` (text, PRIMARY KEY)
+  - デモユーザーコード（例：`demo-1`, `demo-readonly`）。
+- `name` (text, NOT NULL)
+  - 表示名。
+- `is_read_only` (boolean, NOT NULL, DEFAULT false)
+  - 読み取り専用ユーザーかどうか。
+- `created_at` (timestamp with time zone, NOT NULL, DEFAULT now())
 
 ### books
 
-- `id` (PK, bigint)
-- `user_id` (FK → users.id)
+- `id` (bigserial, PRIMARY KEY)
+- `user_id` (text, NOT NULL, FK → users.id)
+  - 所有ユーザー。
 - `title` (text, NOT NULL)
-- `total_pages` (integer, NOT NULL)
+  - 書籍タイトル。
+- `total_pages` (integer, NOT NULL, CHECK total_pages >= 1)
+  - 書籍の総ページ数。
 - `author` (text, NULL)
+  - 著者名。
 - `publisher` (text, NULL)
-- `isbn` (text, NULL) … 10 or 13 digits、ハイフン無し
-- `pages_read` (integer, NOT NULL, default 0) … 累計
-- `minutes_total` (integer, NOT NULL, default 0) … 累計読書時間（分）
-- `state` (text, NOT NULL) … `reading` | `done`
-- `updated_at` (timestamp with time zone)
-- `created_at` (timestamp with time zone)
-- `deleted_at` (timestamp with time zone, NULL) … ソフトデリート
+  - 出版社。
+- `isbn` (text, NULL)
+  - ISBN。10桁または13桁の数字のみ（ハイフン無し）。
+- `pages_read` (integer, NOT NULL, DEFAULT 0)
+  - 累計読了ページ数。
+- `minutes_total` (integer, NOT NULL, DEFAULT 0)
+  - 累計読書時間（分）。
+- `state` (text, NOT NULL, DEFAULT 'reading', CHECK state IN ('reading', 'done'))
+  - 読書状態。
+- `deleted_at` (timestamp with time zone, NULL)
+  - ソフトデリート日時。NULL の場合は有効。
+- `created_at` (timestamp with time zone, NOT NULL, DEFAULT now())
+- `updated_at` (timestamp with time zone, NOT NULL, DEFAULT now())
 
 ### reading_logs
 
-- `id` (PK, bigint)
-- `book_id` (FK → books.id)
-- `user_id` (FK → users.id)
-- `date_jst` (date) … 日本時間基準の日付
-- `cumulative_pages` (integer, NOT NULL) … その日の終了時点での累計ページ数
-- `minutes` (integer, NULL) … そのログで読んだ時間（分）
-- `memo` (text, NULL) … 任意の短いメモ（最大文字数はバリデーション参照）
-- `created_at` (timestamp with time zone)
+- `id` (bigserial, PRIMARY KEY)
+- `book_id` (bigint, NOT NULL, FK → books.id)
+- `user_id` (text, NOT NULL, FK → users.id)
+- `date_jst` (date, NOT NULL)
+  - 日本時間基準の日付。
+- `cumulative_pages` (integer, NOT NULL, CHECK cumulative_pages >= 0)
+  - ログ時点での累計読了ページ数。
+- `minutes` (integer, NOT NULL, DEFAULT 0, CHECK minutes >= 0)
+  - そのログで読んだ時間（分）。
+- `memo` (text, NULL)
+  - 任意の短いメモ（最大文字数はバリデーションで制御）。
+- `created_at` (timestamp with time zone, NOT NULL, DEFAULT now())
 
 ### notes
 
-- `id` (PK, bigint)
-- `book_id` (FK → books.id)
-- `user_id` (FK → users.id)
-- `body` (text, NOT NULL) … ノート本文（最大500文字）
-- `created_at` (timestamp with time zone)
+- `id` (bigserial, PRIMARY KEY)
+- `book_id` (bigint, NOT NULL, FK → books.id)
+- `user_id` (text, NOT NULL, FK → users.id)
+- `body` (text, NOT NULL)
+  - ノート本文（最大500文字程度、リンク禁止）。
+- `created_at` (timestamp with time zone, NOT NULL, DEFAULT now())
 
 ---
 
