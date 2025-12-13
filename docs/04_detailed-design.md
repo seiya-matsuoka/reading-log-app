@@ -180,209 +180,754 @@ reading-log-app/
 └─ README.md
 ```
 
-### 役割と責務（要約）
-- **backend/src/routes**：HTTPルート宣言（メソッド×パス→controller）。
-- **controllers**：`req/res`を扱う境界。DTO整形・ステータス決定。
-- **services**：業務ロジック（累計→差分計算、状態自動遷移、Undo制御）。
-- **repositories**：`.sql`読込＋`pg`実行（パラメタバインド）。
-- **db**：接続プール・トランザクション。
-- **middleware**：CORS、デモユーザー解決、読み取り専用ガード、エラー整形。
-- **frontend/pages**：画面本体。URL毎の入出力。
-- **components/common**：汎用UI部品（ボタン、入力、ローダー等）。
-- **components/books**：ドメイン特化UI（カード、検索、統計バー等）。
-- **lib/api.js**：API薄ラッパ（baseURL、`X-Demo-User`、`messageId`ハンドリング）。
-- **messages/messages.json**：文言一元管理（Backは`messageId`のみ返す）。
+---
+
+## 2. バックエンド詳細
+
+### 2.1 エントリーポイント／アプリ構成
+
+#### index.js
+
+- 役割：
+  - `env.js` で環境変数を読み込む。
+  - `app.js` から Express アプリを import。
+  - `PORT`（Render が割り当て）で `app.listen`。
+
+#### app.js
+
+- 役割：
+  - `express()` でアプリ生成。
+  - 共通ミドルウェア登録：
+    - `express.json()`
+    - `cors`（`cors.js`）
+    - `demoUser`（`demoUser.js`）
+  - ルート登録：
+    - `/api/me` → `me.js`
+    - `/api/books` → `books.js`
+    - `/api/books/:bookId/logs` → `logs.js`
+    - `/api/books/:bookId/notes` & `/api/notes/:noteId` → `notes.js`
+    - `/api/stats` → `stats.js`
+    - `/health` → `health.js`
+  - 最終エラーハンドラ：
+    - `errorHandler.js` を `app.use` の最後に設定。
+
+### 2.2 共通モジュール
+
+#### env.js
+
+- 役割：
+  - `process.env` から必要な値を読み取り、最低限の検証を行う。
+  - 主な項目：
+    - `DATABASE_URL` / `DATABASE_URL_POOLED`
+    - `FRONTEND_ORIGIN`
+    - `NODE_ENV`
+
+#### pool.js
+
+- 役割：
+  - `pg` の `Pool` を生成して export。
+  - `DATABASE_URL_POOLED` を用い、TLS（`ssl: { rejectUnauthorized: false }` 等）設定。
+- 用途：
+  - Repository層から `pool.query`／`client = await pool.connect()` で利用。
+
+#### cors.js
+
+- 役割：
+  - `FRONTEND_ORIGIN` のみを `Access-Control-Allow-Origin` として許可。
+  - `Access-Control-Allow-Methods: GET,POST,PATCH,DELETE,OPTIONS`
+  - `Access-Control-Allow-Headers: Content-Type, X-Demo-User`
+
+#### demoUser.js
+
+- 役割：
+  - リクエストヘッダ `X-Demo-User` を参照し、未指定時は `demo-1` を既定値とする。
+  - `req.demoUser = { id: 'demo-1', isReadOnly: false }` のような形で付与。
+  - 読み取り専用ユーザー（`demo-readonly`）の場合は `isReadOnly: true` をセット。
+
+#### readonlyGuard.js
+
+- 役割：
+  - 書き込み系ルートに適用されるミドルウェア。
+  - `req.demoUser.isReadOnly === true` の場合：
+    - `http.forbidden(res, MSG.ERR_FORBIDDEN_READONLY)` で即時レスポンス。
+- 適用箇所：
+  - Books の POST／PATCH／DELETE
+  - Logs の POST／DELETE
+  - Notes の POST／PATCH／DELETE
+
+#### errorHandler.js
+
+- 役割：
+  - ルート／コントローラ／サービスで throw されたエラーを受け取り、最後のレスポンスに整形。
+  - `err.status` があればそのステータス、なければ 500。
+  - JSON 形式：
+    - `{ error: true, message: err.message || MSG.ERR_INTERNAL }`
+
+#### http.js
+
+- 役割：
+  - コントローラからのレスポンス生成を標準化するヘルパ。
+- 主な関数：
+  - `ok(res, data, message?)` → `200` + `{ data, message? }`
+  - `created(res, data, message?)` → `201` + `{ data, message? }`
+  - `noContent(res)` → `204` + ボディなし
+  - `bad(res, message)` → `400` + `{ error: true, message }`
+  - `forbidden(res, message)` → `403` + `{ error: true, message }`
+  - `notFound(res, message)` → `404` + `{ error: true, message }`
+  - `conflict(res, message)` → `409` + `{ error: true, message }`
+  - `error(res, message)` → `500` + `{ error: true, message }`
+
+#### messages.js（Back）
+
+- 役割：
+  - サーバ側メッセージの SoT。
+- 構造：
+  - `MSG.ERR_*`, `MSG.INFO_*`, `MSG.WARN_*` 形式の定数をまとめたオブジェクト。
+- 例：
+  - `MSG.INFO_SAVED`, `MSG.INFO_DELETED`, `MSG.INFO_UNDO_DONE`
+  - `MSG.ERR_BAD_REQUEST`, `MSG.ERR_BOOK_NOT_FOUND`, `MSG.ERR_LOG_NOT_FOUND`
+  - `MSG.ERR_FORBIDDEN_READONLY`, `MSG.ERR_LINK_FORBIDDEN` 等
+
+#### validation.js
+
+- 役割：
+  - 入力値のサニタイズ・バリデーション共通処理。
+- 主な機能：
+  - `normalizeText(value)`：NFKC 正規化＋ゼロ幅文字除去。
+  - `assertNoLink(text)`：URL/リンクっぽい文字列を検出してエラー。
+  - 書籍用：タイトル必須／総ページ数の範囲／ISBNフォーマットチェック。
+  - ログ用：累計ページが増加しているか／minutes が 0 以上の整数か／未来日でないか。
+  - Notes用：本文必須・最大文字数。
+
+#### date.js
+
+- 役割：
+  - JST 基準での日付操作。
+- 主な機能：
+  - `getTodayJst()`：JSTの今日の日付（Date/文字列）。
+  - `parseYmd(str)`：`YYYY-MM-DD` 文字列 → Date。
+  - `formatYmd(date)`：Date → `YYYY/MM/DD` 形式文字列。
 
 ---
 
-## 2. 実装順序（推奨）
-1) **リポジトリ初期化**：モノレポ作成、`.nvmrc`、`README`。
-2) **Backend基盤**：`app.js`（CORS/JSON/error）、`pool.js`、環境変数、`/api/me` 仮実装。
-3) **マイグレーション**：`0001_init.sql` 作成→適用、デモユーザー投入（seed）。
-4) **Books（最小）**：作成／取得／一覧／更新（基本情報）／ソフト削除。
-5) **Logs**：累計入力→差分計算、Undo（直前のみ）。Booksのカウンタ更新と状態自動遷移を同一Txで実装。
-6) **Notes**：書籍詳細へのメモのみ登録／削除／一覧。
-7) **Stats**：月次（今月＋過去月）返却。
-8) **Frontend基盤**：Vite + React、Router、Header、`lib/api.js`、`messages.json`、`utils/date.js`。
-9) **画面実装**：
-   - `/login`（切替UI）→`/books`（一覧＋クイック更新）→`/books/new`→`/books/:id`（詳細・履歴・メモ）
-10) **ローディング/エラー体験**：一覧スケルトン、ボタンスピナー、インラインエラー。
-11) **最終調整**：JST境界の統計確認、読み取り専用のUI制御、デモ注意文言。
+### 2.3 ルーティング層
 
----
+#### me.js
 
-## 3. ルーティング & エンドポイント（洗い出し）
-- **セッション/ユーザー**
-  - `GET /api/me` … { id, name, isReadOnly }
-- **書籍（Books）**
-  - `GET /api/books?q=&state=reading|done&limit=&offset=`
-  - `POST /api/books` … { title, totalPages, author?, publisher?, isbn?, note? }
-  - `GET /api/books/:id`
-  - `PATCH /api/books/:id` … { title?, totalPages?, author?, publisher?, isbn?, note? }
-  - `DELETE /api/books/:id` … ソフトデリート（deleted_at）
-- **読書ログ（Reading Logs）**
-  - `GET /api/books/:id/logs?limit=&offset=`
-  - `POST /api/books/:id/logs` … { dateJst, cumulativePages, minutes?, memo? }
-  - `DELETE /api/logs/:logId` … 直前ログのUndo用（サービス側で厳密判定）
-- **メモ（Notes）**
-  - `GET /api/books/:id/notes?limit=&offset=`
-  - `POST /api/books/:id/notes` … { body }
+- `GET /api/me`
+  - `req.demoUser` をもとに `{ id, code, name, isReadOnly }` を返却。
+  - 実装ではデモユーザーを固定セットとして持ち、`code`（例：`demo-1`）に対応する表示名を返す。
+
+#### books.js
+
+- ベースパス：`/api/books`
+- ルート：
+  - `GET /api/books`
+    - クエリ：
+      - `q`（任意：タイトル・著者の部分一致）
+      - `state`（任意：`reading|done`）
+    - 処理：
+      - `bookController.listBooks`。
+  - `POST /api/books`
+    - ミドルウェア：`readonlyGuard`
+    - ボディ：
+      - `{ title, totalPages, author?, publisher?, isbn? }`
+    - 処理：
+      - `bookController.createBook`。
+  - `GET /api/books/:bookId`
+    - 処理：
+      - `bookController.getBookDetail`。
+  - `PATCH /api/books/:bookId`
+    - ミドルウェア：`readonlyGuard`
+    - 処理：
+      - `bookController.updateBook`。
+  - `DELETE /api/books/:bookId`
+    - ミドルウェア：`readonlyGuard`
+    - 処理：
+      - `bookController.softDeleteBook`。
+
+#### logs.js
+
+- ベースパス：`/api/books/:bookId/logs`
+- ルート：
+  - `GET /api/books/:bookId/logs`
+    - 処理：`logController.listLogs`。
+  - `POST /api/books/:bookId/logs`
+    - ミドルウェア：`readonlyGuard`
+    - ボディ：
+      - `{ cumulativePages, minutes?, dateJst?, memo? }`
+    - 処理：`logController.createLog`。
+  - `DELETE /api/books/:bookId/logs/latest`
+    - ミドルウェア：`readonlyGuard`
+    - 処理：`logController.deleteLatestLog`（Undo）。
+
+#### notes.js
+
+- ベースパス：`/api/books/:bookId/notes`, `/api/notes/:noteId`
+- ルート：
+  - `GET /api/books/:bookId/notes`
+    - 処理：`noteController.listNotes`。
+  - `POST /api/books/:bookId/notes`
+    - ミドルウェア：`readonlyGuard`
+    - ボディ：`{ body }`
+  - `GET /api/notes/:noteId`
+    - 処理：`noteController.getNote`。
+  - `PATCH /api/notes/:noteId`
+    - ミドルウェア：`readonlyGuard`
+    - ボディ：`{ body }`
   - `DELETE /api/notes/:noteId`
-- **統計（Stats）**
-  - `GET /api/stats/monthly?year=YYYY&month=MM` … { totalPages, avgPerDay }
+    - ミドルウェア：`readonlyGuard`
 
-> ステータスコードは最小限（200/201/204/400/403/404/409/500）。レスポンス骨子：`{ data, error, messageId }`。
+#### stats.js
 
----
+- ベースパス：`/api/stats`
+- ルート：
+  - `GET /api/stats/monthly`
+    - クエリ：`year`, `month`（必須）
+    - 処理：`statsController.getMonthlyStats`。
 
-## 4. 生SQL（.sql）洗い出し（機能→クエリ）
-### 4.1 migrations
-- `0001_init.sql` … テーブル：`users`, `books`, `reading_logs`, `notes`（FK制約、NOT NULL、デフォルト、インデックス最小）
-- `0002_indexes.sql` … 需要に応じて `books(user_id,state,updated_at)`, `LOWER(title)`, `LOWER(author)` 等
+#### health.js
 
-### 4.2 books（repositories/books）
-- `insert_book.sql` … 新規作成（重複警告用に同名・同著者の存在チェックはサービス側）
-- `get_book_by_id.sql` … 詳細取得（deleted_at IS NULL）
-- `list_books_by_user.sql` … 検索（q: title/author部分一致・lower）、stateフィルタ、更新降順
-- `update_book.sql` … 基本情報更新（isbnは数字のみ）
-- `soft_delete_book.sql` … deleted_atに現在時刻を設定
-- （任意）`update_book_counters.sql` … pages_read・minutes_total・state をまとめて更新（Tx内で使用）
-
-### 4.3 reading_logs（repositories/logs）
-- `insert_log.sql` … {book_id,user_id,date_jst,cumulative_pages,minutes?,memo?}
-- `list_logs_by_book.sql` … 時系列降順（created_at DESC）
-- `delete_log_by_id.sql` … 直前ログの削除（Tx内でbook再計算）
-- （任意）`recalc_book_from_logs.sql` … logs集約→booksへ反映（巻き戻し/再集計に使用）
-
-### 4.4 notes（repositories/notes）
-- `insert_note.sql` … 書籍詳細へのメモ追加
-- `list_notes_by_book.sql` … 作成日時降順
-- `delete_note_by_id.sql`
-
-### 4.5 stats（repositories/stats）
-- `monthly_pages.sql` … JSTで月境界を切って `delta` 合算と平均（日数割り）
-
-> すべて**パラメタ化（$1, $2, ...）**でSQLインジェクション対策。必要に応じ**Txで一貫更新**。
+- `GET /health`
+  - シンプルなヘルスチェック。
+  - 例：`{ status: 'ok' }` を返す。
 
 ---
 
-## 5. ビジネスルール（コア）
-- **状態自動判定**：`pages_read >= total_pages` → `done`、未満→`reading`。手動変更不可。
-- **ログ登録（累計入力）**：前回 `cumulative_pages` と比較し `delta = 新 - 旧` を算出。`delta <= 0` はエラー（`messageId=ERR_CUMULATIVE_NOT_INCREASED`）。`pages_read = min(total_pages, cumulative)`／`minutes_total += minutes||0` を更新。
-- **Undo**：**常に最新1件のみ**を対象。1回実行ごとに“最新”が更新されるため**連続Undo可**。削除後は `pages_read` / `minutes_total` を巻き戻し（または再集計）。
+### 2.4 コントローラ層
+
+#### bookController.js
+
+- `listBooks(req, res)`
+  - 入力：
+    - `req.demoUser.id`
+    - `req.query.q`, `req.query.state`
+  - 処理：
+    - サービスに検索条件を渡し、書籍リストを取得。
+  - 出力：
+    - `http.ok(res, books)`。
+
+- `getBookDetail(req, res)`
+  - 入力：`bookId`
+  - 処理：
+    - サービスから書籍詳細を取得。
+    - 見つからない場合は `http.notFound(res, MSG.ERR_BOOK_NOT_FOUND)`。
+  - 出力：
+    - `http.ok(res, bookDetail)`。
+
+- `createBook(req, res)`
+  - ボディのバリデーション（title, totalPages, isbn 等）。
+  - サービスで作成→ `http.created(res, createdBook, MSG.INFO_SAVED)`。
+
+- `updateBook(req, res)`
+  - ボディの部分更新（タイトル・総ページ数・著者・出版社・ISBN）。
+  - サービスで更新→ `http.ok(res, updatedBook, MSG.INFO_SAVED)`。
+
+- `softDeleteBook(req, res)`
+  - サービスで `deleted_at` を設定。
+  - `http.noContent(res)` もしくは `http.ok(res, {}, MSG.INFO_DELETED)`。
+
+#### logController.js
+
+- `listLogs(req, res)`
+  - 書籍IDを取得し、サービスからログ一覧を取得。
+  - `http.ok(res, logs)`。
+
+- `createLog(req, res)`
+  - 累計ページ・minutes・日付・メモのバリデーション。
+  - サービスで「累計→差分計算＋booksカウンタ更新＋log挿入」をトランザクションで実施。
+  - 成功時：`http.created(res, createdLog, MSG.INFO_SAVED)`。
+
+- `deleteLatestLog(req, res)`
+  - サービスで「直前ログの存在チェック→削除→booksの巻き戻し」を実施。
+  - 成功時：`http.ok(res, undoneInfo, MSG.INFO_UNDO_DONE)`。
+  - ログなし：`http.notFound(res, MSG.ERR_LOG_NOT_FOUND)`。
+
+#### noteController.js
+
+- `listNotes(req, res)`
+  - 書籍IDで Notes 一覧を取得。
+  - `http.ok(res, notes)`。
+
+- `createNote(req, res)`
+  - 本文のバリデーション（必須／長さ／リンク禁止）。
+  - サービスで追加→`http.created(res, note, MSG.INFO_SAVED)`。
+
+- `getNote(req, res)`
+  - `noteId` で単一ノートを取得。
+  - なければ404。
+
+- `updateNote(req, res)`
+  - 本文バリデーション→更新→`http.ok(res, note, MSG.INFO_SAVED)`。
+
+- `deleteNote(req, res)`
+  - 削除→`http.ok(res, {}, MSG.INFO_DELETED)` もしくは `noContent`。
+
+#### statsController.js
+
+- `getMonthlyStats(req, res)`
+  - クエリの `year`, `month` を数値化・検証。
+  - サービスで月次統計を取得。
+  - `http.ok(res, stats)`。
 
 ---
 
-## 6. フロントのコンポーネント構成
-### 5.1 画面単位
-- **Login.jsx** … デモユーザー選択（初期はdemo-1）、注意書き
-- **Register.jsx** … 登録不可の説明のみ
-- **BooksList.jsx** … 検索/フィルタ、統計バー、カード一覧、クイック更新（累計→＋N表示）
-- **BookNew.jsx** … 新規登録フォーム（インラインエラー）
-- **BookDetail.jsx** … 基本情報、進捗（%・ページ・累計時間）、ログ履歴、メモ履歴、メモ追加、直前ログUndo
+### 2.5 サービス層
 
-### 5.2 コンポーネント
-- **common/**
-  - `Header.jsx`（ナビ）
-  - `Button.jsx`, `Input.jsx`, `Select.jsx`
-  - `Spinner.jsx`（ボタン内）
-  - `SkeletonCard.jsx`（一覧初回ロード）
-  - `FormFieldError.jsx`（各項目の直下エラー表示）
-- **books/**
-  - `BookCard.jsx`（タイトル/著者/進捗バー/累計時間/最終更新）
-  - `QuickUpdateForm.jsx`（累計読了ページ・時間・短メモ→POST）
-  - `SearchBar.jsx`（q, state）
-  - `StatsBar.jsx`（今月＋過去月選択）
+#### bookService.js
 
-### 5.3 共通処理
-- **lib/api.js** … fetch薄ラッパ：`get/post/patch/delete(path, body)`／`X-Demo-User` ヘッダ付与／`messageId`→throw or返却
-- **messages/messages.json** … UI文言（空状態、注意、成功/失敗、バリデーション）
-- **utils/date.js** … JST→表示`YYYY/MM/DD`
-- **utils/sanitize.js** … NFKC/ゼロ幅除去/URL検知（リンク禁止）
+- `listBooks({ userId, q, state })`
+  - `bookRepository.listBooks` 呼び出し。
+  - title/author 検索は lowercase + `%q%` の部分一致。
 
----
+- `getBookDetail({ userId, bookId })`
+  - `bookRepository.getBook`。
+  - 必要に応じてログ・メモ数などを付加するのは repository or SQL 側。
 
-## 6. 入力・エラー表示ルール（UI）
-- **バリデーション表示**：**submit時 + first blur時**。フィールド特定できるエラーは**直下に**、全体エラーは**フォーム上部**に短文。
-- **ローディング**：一覧初回は**スケルトン**（または上部ローダー）、保存/更新は**ボタン内スピナー**。
-- **読み取り専用ユーザー**：書込みUIは無効化（ボタンdisabled/非表示）＋説明文。
+- `createBook(input)`
+  - バリデーション（validation.js）→ `bookRepository.insertBook`。
 
----
+- `updateBook({ bookId, userId, patch })`
+  - 存在チェック → バリデーション → `bookRepository.updateBook`。
 
-## 7. 基本フロー（図・テキスト）
-### 7.1 初回ロード（一覧）
-```
-[ユーザー] → /books にアクセス
-  → [Front] スケルトン表示 / api.get('/api/me') / api.get('/api/books') / api.get('/api/stats/monthly')
-  → [Back] CORS許可 / X-Demo-User 解決 / DB参照
-  → [Front] スケルトン解除→カード描画、統計表示
-```
+- `softDeleteBook({ bookId, userId })`
+  - 存在チェック → `bookRepository.softDeleteBook`。
 
-### 7.2 クイック更新（累計入力→差分計算）
-```
-[ユーザー] 累計読了ページ(=現在)を入力 + 任意で時間/メモ → 保存
-  → [Front] ボタンスピナー / api.post('/api/books/:id/logs', {cumulativePages,...})
-  → [Back] 直近累計との差分delta計算 → 書込みTx（logs insert → booksカウンタ更新 → state自動判定）
-  → [Front] 成功メッセージ → カード再描画（＋Nページ表示）
-```
+#### logService.js
 
-### 7.3 直前ログのUndo
-```
-[ユーザー] Undo → api.delete('/api/logs/:logId')
-  → [Back] Tx（log削除 → books再集計or巻戻し）
-  → [Front] 成功メッセージ → 再描画
-```
+- `listLogs({ userId, bookId })`
+  - `logRepository.listLogs` を呼び出し。
 
-### 7.4 月次統計（JST）
-```
-[ユーザー] 月を選択 → api.get('/api/stats/monthly?year&month')
-  → [Back] JST境界でdelta合算・平均算出
-  → [Front] 値更新
-```
+- `createLog({ userId, bookId, cumulativePages, minutes, dateJst, memo })`
+  - 正規化・バリデーション。
+  - トランザクション内で：
+    1. `logRepository.getLatestLog` で直前の累計ページを取得。
+    2. `delta = cumulativePages - latest.cumulativePages` を計算。
+       - `delta <= 0` の場合はエラー（`MSG.ERR_CUMULATIVE_NOT_INCREASED`）。
+    3. `logRepository.insertLog` で新規ログ追加。
+    4. `bookRepository.updateBookCounters` で
+       - `pages_read = min(total_pages, cumulativePages)`
+       - `minutes_total += minutes || 0`
+       - `state` 自動判定（`reading`/`done`）。
+  - 完了後、作成されたログ情報を返す。
+
+- `deleteLatestLog({ userId, bookId })`
+  - トランザクション内で：
+    1. `logRepository.getLatestLog` で最新ログを取得（なければエラー）。
+    2. `logRepository.deleteLatestLog` で削除。
+    3. `bookRepository.getBookCountersFromLogs` で logs テーブルから再集計。
+    4. `bookRepository.updateBookCounters` で books に反映。
+  - 巻き戻し後の `pages_read`／`minutes_total` などを返す。
+
+#### noteService.js
+
+- `listNotes({ userId, bookId })`
+- `createNote({ userId, bookId, body })`
+- `getNote({ userId, noteId })`
+- `updateNote({ userId, noteId, body })`
+- `deleteNote({ userId, noteId })`
+
+→ いずれも validation.js で本文をチェックした上で、noteRepository に委譲。
+
+#### statsService.js
+
+- `getMonthlyStats({ userId, year, month })`
+  - `statsRepository.getMonthlyPages` を呼び出し。
+  - 返り値から `{ year, month, totalPages, avgPerDay }` などの構造を組み立てる。
 
 ---
 
-## 8. CORS・セキュリティ・環境変数
-- **CORS**：`FRONTEND_ORIGIN`のみ許可。`OPTIONS`を共通MWで応答。`Access-Control-Allow-Headers: X-Demo-User, Content-Type`。
-- **入力ガード**：全入力でリンク禁止（`://`, `www.`, 短縮ドメイン）＋NFKC＋ゼロ幅除去。XSSはテキストエスケープ。
-- **環境変数**：
-  - **Backend(Render)**：`DATABASE_URL_POOLED`, `FRONTEND_ORIGIN`, `NODE_ENV`
-  - **Frontend(Vercel)**：`VITE_API_BASE_URL`（公開可の値のみ）
-- **リージョン**：Vercel Postgres=APAC(Singapore)／Render=Singapore
+### 2.6 リポジトリ層 & SQL
+
+各リポジトリは `.sql` ファイルを読み込み、`pool.query` で実行する想定。
+
+#### bookRepository.js
+
+- 利用SQL：
+  - `list_books.sql`
+  - `get_book.sql`
+  - `insert_book.sql`
+  - `update_book.sql`
+  - `soft_delete_book.sql`
+  - `get_book_counters.sql`
+  - `update_book_counters.sql`
+- 主な関数：
+  - `listBooks({ userId, q, state })`
+  - `getBook({ userId, bookId })`
+  - `insertBook(input)`
+  - `updateBook({ userId, bookId, patch })`
+  - `softDeleteBook({ userId, bookId })`
+  - `getBookCounters({ userId, bookId })`
+  - `updateBookCounters({ userId, bookId, pagesRead, minutesTotal, state })`
+
+#### logRepository.js
+
+- 利用SQL：
+  - `list_logs.sql`
+  - `get_latest_log.sql`
+  - `insert_log.sql`
+  - `delete_latest_log.sql`
+- 主な関数：
+  - `listLogsByBook({ userId, bookId })`
+  - `getLatestLog({ userId, bookId })`
+  - `insertLog({ userId, bookId, ... })`
+  - `deleteLatestLog({ userId, bookId })`
+
+#### noteRepository.js
+
+- 利用SQL：
+  - `list_notes.sql`
+  - `insert_note.sql`
+  - `get_note.sql`
+  - `update_note.sql`
+  - `delete_note.sql`
+- 主な関数：
+  - `listNotesByBook({ userId, bookId })`
+  - `insertNote({ userId, bookId, body })`
+  - `getNote({ userId, noteId })`
+  - `updateNote({ userId, noteId, body })`
+  - `deleteNote({ userId, noteId })`
+
+#### statsRepository.js
+
+- 利用SQL：
+  - `get_monthly_pages.sql`
+- 主な関数：
+  - `getMonthlyPages({ userId, year, month })`
+    - JST 基準の月境界でページ数を集計し、日数や読書日数も返す想定。
+
+#### マイグレーション & シード
+
+- `0000_reset_all.sql`
+  - 全テーブル truncate／drop 等で初期化。
+- `0001_init.sql`
+  - `users`, `books`, `reading_logs`, `notes` のテーブル定義。
+- `0001_demo_users.sql`〜`0004_demo_notes.sql`
+  - デモユーザー／書籍／ログ／メモの投入。
+- `migrate.js`
+  - 上記 SQL を適用する Node スクリプト。
+- `seed.js`
+  - デモ用 SQL を適用する Node スクリプト。
 
 ---
 
-## 9. テスト・運用
-- **ログ出力**：**行わない**（console含む）。
-- **テスト**：手動E2Eのみ（ユニットテストは実施しない）。
-- **シード**：コマンド実行（UIなし）。`seed:reset`=truncate→insert を想定。
+## 3. フロントエンド詳細
+
+### 3.1 アプリケーション構成
+
+#### main.jsx
+
+- 役割：
+  - `ReactDOM.createRoot` で `App` をマウント。
+  - `BrowserRouter` でルーティングを提供。
+  - `MeProvider`（meContext）と `ToastProvider` をラップ。
+
+#### App.jsx
+
+- 役割：
+  - 共通レイアウト（Header＋mainコンテンツ）を構築。
+  - `AppRoutes` コンポーネント（`routes.jsx`）を配置。
+
+#### routes.jsx
+
+- 役割：
+  - ルート定義。
+- マッピング：
+  - `/login` → `Login`
+  - `/register` → `Register`
+  - `/books` → `BooksList`
+  - `/books/new` → `BookNew`
+  - `/books/:id` → `BookDetail`
+  - `*` → `NotFound`
 
 ---
 
-## 9.1 メッセージID最小セット（決定）
-- **成功系**
-  - `INFO_SAVED`：保存しました。
-  - `INFO_DELETED`：削除しました。
-  - `INFO_UNDO_DONE`：直前の記録を取り消しました。
-  - `INFO_READONLY_USER`：このユーザーは読み取り専用です。
-  - `INFO_NO_RESULTS`：該当するデータがありません。
-- **警告系**
-  - `WARN_DUPLICATE_BOOK`：同名・同著者の書籍がすでに登録されています（登録は可能です）。
-- **エラー系（入力/業務）**
-  - `ERR_TITLE_REQUIRED`：書籍名を入力してください。
-  - `ERR_TOTAL_PAGES_RANGE`：総ページ数は1以上の数値で入力してください。
-  - `ERR_ISBN_FORMAT`：ISBNは10桁または13桁の数字で入力してください（ハイフン不要）。
-  - `ERR_LINK_FORBIDDEN`：リンクやURLは入力できません。
-  - `ERR_FUTURE_DATE`：未来の日付は指定できません。
-  - `ERR_CUMULATIVE_NOT_INCREASED`：読了ページの累計は前回より大きい値を入力してください。
-  - `ERR_MINUTES_RANGE`：読書時間は0以上の整数で入力してください。
-  - `ERR_NOTE_LENGTH`：メモが長すぎます。
-  - `ERR_BOOK_NOT_FOUND`：書籍が見つかりません。
-  - `ERR_LOG_NOT_FOUND`：読書ログが見つかりません。
-  - `ERR_NOTE_NOT_FOUND`：メモが見つかりません。
-  - `ERR_FORBIDDEN_READONLY`：読み取り専用ユーザーは変更できません。
-  - `ERR_BAD_REQUEST`：入力内容を確認してください。
-  - `ERR_RATE_LIMITED`：短時間に操作が集中しています。しばらくしてからお試しください。
-  - `ERR_INTERNAL`：エラーが発生しました。時間をおいて再度お試しください。
+### 3.2 コンテキスト／ライブラリ／ユーティリティ
 
+#### api.js
 
+- 役割：
+  - バックエンド API の薄いラッパ。
+- 挙動：
+  - `VITE_API_BASE_URL` を baseURL として fetch。
+  - `X-Demo-User` ヘッダを自動付与。
+  - レスポンス JSON から
+    - `json.message` または `json.data.message` を取り出し、内部に保存。
+    - 成功時は `json.data` を返す。
+    - 失敗（`!res.ok` or `json.error`）時は `Error(message)` を throw。
+  - `api.getLastMessage()` で最後に受け取った `message` を取り出せる。
+
+#### meContext.jsx
+
+- 役割：
+  - 現在のデモユーザー情報（`/api/me`）を保持。
+  - ログイン画面でユーザー切り替えが行われた際、`X-Demo-User` に反映。
+
+#### toastContext.js / ToastProvider.jsx
+
+- 役割：
+  - トーストメッセージ（type: success/error/info 等）をグローバルで管理。
+  - API 成功時／失敗時にメッセージを表示。
+
+#### messages.js（Front）
+
+- 役割：
+  - フロント専用メッセージ辞書 `MSG.FE.*`。
+- 用途：
+  - ネットワークエラー時の汎用メッセージ。
+  - Confirm ダイアログ（削除確認など）。
+  - 画面固有のラベル・説明文・空状態メッセージ。
+- 方針：
+  - サーバ側 `MSG` と重複する文言は原則持たず、  
+    「UIラベル」や「ネットワークエラー」などのみ保持する。
+
+#### date.js（Front）
+
+- 役割：
+  - Date → 表示用文字列 `YYYY/MM/DD` の変換。
+  - 必要に応じて `YYYY-MM-DD` 入力用の変換。
+
+#### validation.js（Front）
+
+- 役割：
+  - クライアント側バリデーション。
+  - サーバと同じルールを可能な範囲で再現（タイトル必須、総ページ数範囲、ISBNフォーマット等）。
+
+#### sanitize.js
+
+- 役割：
+  - テキストの NFKC 正規化／ゼロ幅文字除去。
+  - URL/リンクの検知（`://`, `www.`, 一部短縮URL）を行い、NG の場合はエラーとして扱う。
+
+---
+
+### 3.3 共通コンポーネント
+
+- `Header.jsx`
+  - アプリ名／ナビゲーションリンク（一覧／新規書籍／ログイン／登録）。
+- `Button.jsx`
+  - バリアントと loading 状態（Spinner 内蔵）をサポート。
+- `Input.jsx`
+  - text/number/date など基本的な入力コンポーネント。
+- `Select.jsx`
+  - 状態フィルタ／ユーザー選択などに使用。
+- `Spinner.jsx`
+  - ボタン内やページローディングで利用するスピナー。
+- `SkeletonCard.jsx`
+  - 書籍カードのスケルトン版。
+  - Tailwind のカスタムクラス＋ `@keyframes shimmer` でシマーアニメーションを適用。
+- `FormFieldError.jsx`
+  - フィールド直下にバリデーションエラー文言を表示。
+- `PageLoading.jsx`
+  - 一覧／詳細の「ページレベル」のローディング表示専用。
+  - 挙動：
+    - 初期状態：通常のローディング文言（＋必要に応じて Skeleton を併用）。
+    - 一定時間（閾値：5秒）経過：
+      - 「サーバ起動に時間がかかっている可能性」を説明する文言。
+      - 大きめのスピナー。
+
+---
+
+### 3.4 書籍関連コンポーネント
+
+- `BookCard.jsx`
+  - 書籍一覧用のカード。
+  - 表示内容：
+    - タイトル、著者
+    - 総ページ数／読了ページ数／進捗バー
+    - 累計読書時間（分）
+    - 最終更新日
+  - タイトルをクリックで `/books/:id` に遷移。
+
+- `BookForm.jsx`
+  - 新規登録／編集共通フォーム。
+  - フィールド：
+    - タイトル（必須）
+    - 総ページ数（必須）
+    - 著者、出版社、ISBN（任意）
+  - フロントバリデーション＋サーバエラー表示。
+
+- `QuickUpdateForm.jsx`
+  - 書籍一覧と詳細画面で共通利用。
+  - フィールド：
+    - 累計読了ページ数
+    - 読書時間（分）
+    - 日付（任意。未指定時は今日）
+    - 短いメモ
+  - 処理：
+    - submit → `/api/books/:id/logs` へ POST。
+    - 成功時：`api.getLastMessage()` でメッセージを取得し、トースト表示。
+    - エラー時：`err.message` or `MSG.FE.ERR.NETWORK` をフォーム上部に表示。
+
+- `BookNotesSection.jsx`
+  - 書籍詳細画面の左下カード。
+  - 構成：
+    - メモ追加フォーム。
+    - メモ一覧（最新順）＋編集／削除ボタン。
+  - API：
+    - `GET /api/books/:id/notes`
+    - `POST /api/books/:id/notes`
+    - `GET /api/notes/:noteId`
+    - `PATCH /api/notes/:noteId`
+    - `DELETE /api/notes/:noteId`
+
+---
+
+### 3.5 ページコンポーネント
+
+- `Login.jsx`
+  - デモユーザー選択画面。
+  - Select で `demo-1` などを選び、ログインボタンで `meContext` を更新。
+
+- `Register.jsx`
+  - 「本アプリでは新規登録できない」旨の説明のみ表示。
+
+- `BooksList.jsx`
+  - 書籍一覧画面。
+  - 構成：
+    - 検索バー（`SearchBar`）
+    - 状態フィルタ（`SearchBar`（Select））
+    - 統計バー（`StatsBar`）
+    - 一覧領域：
+      - ローディング中：SkeletonCard＋ローディング文言。
+      - エラー：エラー枠＋メッセージ。
+      - データ有：BookCard のグリッド。
+  - データ取得：
+    - 初回マウントで `/api/books`, `/api/stats/monthly` を並行取得。
+    - 取得開始から5秒以上経過したらスピナー＋専用文言を表示。
+
+- `BookNew.jsx`
+  - 新規書籍登録画面。
+  - 内部で `BookForm` を利用。
+  - 登録成功時に一覧へ遷移し、トースト表示。
+
+- `BookDetail.jsx`
+  - 詳細画面。レイアウトは **2行×2カラムのグリッド**。
+  - 上段左：書籍情報カード（`BookForm` 埋め込み編集／削除ボタン）。
+  - 上段右：進捗入力カード（`QuickUpdateForm`）。
+  - 下段左：メモカード（`BookNotesSection`）。
+  - 下段右：ログ履歴カード（ログ一覧＋直前ログUndoボタン）。
+  - ローディング：
+    - 初回読み込み中は Skeleton＋ローディング文言。
+    - 一定時間以上の場合はスピナー＋専用文言を表示。
+  - 読み取り専用ユーザー時は書込み系 UI を disable。
+
+- `NotFound.jsx`
+  - 存在しないパス時に表示。
+  - `/books` へのリンクを配置。
+
+---
+
+## 4. バリデーション詳細（サーバ／フロント）
+
+### 4.1 共通方針
+
+- すべてのテキスト入力に対して：
+  - NFKC 正規化。
+  - ゼロ幅スペース等の削除。
+  - URL/リンク検知を適用。
+- サーバ側は **最終的な権威** として必ずバリデーションを実施。
+- フロント側はユーザー体験のために「同等のルールを先に表示する」位置づけ。
+
+### 4.2 書籍（Books）
+
+- title
+  - 必須、1〜200文字程度。
+- totalPages
+  - 必須、1以上の整数。
+- author, publisher
+  - 任意、0〜120文字程度、リンク禁止。
+- isbn
+  - 任意。
+  - 10桁または13桁の数字のみ（ハイフン不可）。
+
+### 4.3 読書ログ（Reading Logs）
+
+- cumulativePages
+  - 必須、0以上の整数。
+  - 直前ログの値より大きくない場合はエラー。
+- minutes
+  - 0以上の整数。**NULL不可（default 0）**。
+- memo
+  - 任意、最大300文字程度。
+- dateJst
+  - 必須（日付の指定がなければ内部で当日扱い）。
+  - 日本時間基準で「今日より未来でない」こと。
+
+### 4.4 Notes
+
+- body
+  - 必須、1〜500文字程度。
+  - リンク禁止。
+
+---
+
+## 5. ローディング／エラー体験詳細
+
+### 5.1 一覧画面（BooksList）
+
+- 初回ロード：
+  - 一覧領域に SkeletonCard を複数表示。
+  - 上部に「読み込み中...」のメッセージ。
+- 5秒以上レスポンスがない場合：
+  - 「初回アクセス時はサーバ起動に時間がかかる場合があります」
+  - 「画面を閉じずにお待ちください」
+  - 大きめの Spinner。
+- エラー：
+  - `err.message`（サーバ由来）を優先表示。
+  - なければ `MSG.FE.ERR.NETWORK` を表示。
+
+### 5.2 詳細画面（BookDetail）
+
+- 初回ロード：
+  - 書籍情報・ログ・メモにそれぞれ Skeleton もしくはプレースホルダを表示。
+- 5秒以上レスポンスがない場合：
+  - 「初回アクセス時はサーバ起動に時間がかかる場合があります」
+  - 「画面を閉じずにお待ちください」
+  - 大きめの Spinner。
+- 保存／更新／削除／Undo：
+  - ボタン内に Spinner を表示。
+  - 成功時：`api.getLastMessage()` をトーストで表示。
+  - エラー時：`err.message` をカード内に表示。
+
+---
+
+## 6. 環境変数・設定
+
+### 6.1 Backend (Render)
+
+- `PORT`
+- `DATABASE_URL_POOLED`
+- `FRONTEND_ORIGIN`
+- `NODE_ENV`
+
+### 6.2 Frontend (Vercel)
+
+- `VITE_API_BASE_URL`
+- その他、必要に応じた公開可能な値のみ。
+
+### 6.3 SPAルーティング設定
+
+- Vercel 側で `/books/*` などを `index.html` にフォールバックする設定を行う。
+- これにより、任意の画面でリロードしても 404 にならず、SPA が復元される。
+
+---
+
+## 7. 手動テスト観点（簡易）
+
+- 書籍の新規登録→一覧反映→詳細編集→削除（ソフトデリート）。
+- ログの追加：
+  - 累計入力→差分＋Nページ表示。
+  - 読了に達した際に状態が `done` になること。
+- 直前ログの Undo：
+  - ログが削除され、`pages_read`／`minutes_total` が巻き戻ること。
+- メモの追加／編集／削除：
+  - 本文バリデーション・リンク禁止が機能していること。
+- 統計：
+  - 今月／過去月を切り替えて数値が変わること。
+- 読み取り専用ユーザー：
+  - 書込み系 UI が disable。
+  - 書込み API が 403 を返す。
+- コールドスタート：
+  - 初回アクセスでローディング表示→一定時間後に「サーバ起動中」の説明が出ること。
+  - 起動完了後に一覧が正常に表示されること。
