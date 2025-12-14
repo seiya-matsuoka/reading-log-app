@@ -202,12 +202,12 @@ reading-log-app/
     - `cors`（`cors.js`）
     - `demoUser`（`demoUser.js`）
   - ルート登録：
+    - `/health` → `health.js`
     - `/api/me` → `me.js`
     - `/api/books` → `books.js`
-    - `/api/books/:bookId/logs` → `logs.js`
-    - `/api/books/:bookId/notes` & `/api/notes/:noteId` → `notes.js`
-    - `/api/stats` → `stats.js`
-    - `/health` → `health.js`
+    - `/api/books` → `logs.js`
+    - `/api` → `notes.js`
+    - `/api` → `stats.js`
   - 最終エラーハンドラ：
     - `errorHandler.js` を `app.use` の最後に設定。
 
@@ -218,7 +218,7 @@ reading-log-app/
 - 役割：
   - `process.env` から必要な値を読み取り、最低限の検証を行う。
   - 主な項目：
-    - `DATABASE_URL` / `DATABASE_URL_POOLED`
+    - `DATABASE_URL_POOLED`
     - `FRONTEND_ORIGIN`
     - `NODE_ENV`
 
@@ -228,7 +228,7 @@ reading-log-app/
   - `pg` の `Pool` を生成して export。
   - `DATABASE_URL_POOLED` を用い、TLS（`ssl: { rejectUnauthorized: false }` 等）設定。
 - 用途：
-  - Repository層から `pool.query`／`client = await pool.connect()` で利用。
+  - Repository層から `pool.query` で利用。
 
 #### cors.js
 
@@ -241,7 +241,6 @@ reading-log-app/
 
 - 役割：
   - リクエストヘッダ `X-Demo-User` を参照し、未指定時は `demo-1` を既定値とする。
-  - `req.demoUser = { id: 'demo-1', isReadOnly: false }` のような形で付与。
   - 読み取り専用ユーザー（`demo-readonly`）の場合は `isReadOnly: true` をセット。
 
 #### readonlyGuard.js
@@ -249,7 +248,7 @@ reading-log-app/
 - 役割：
   - 書き込み系ルートに適用されるミドルウェア。
   - `req.demoUser.isReadOnly === true` の場合：
-    - `http.forbidden(res, MSG.ERR_FORBIDDEN_READONLY)` で即時レスポンス。
+    - `http.forbidden(res)` で即時レスポンス。
 - 適用箇所：
   - Books の POST／PATCH／DELETE
   - Logs の POST／DELETE
@@ -258,10 +257,7 @@ reading-log-app/
 #### errorHandler.js
 
 - 役割：
-  - ルート／コントローラ／サービスで throw されたエラーを受け取り、最後のレスポンスに整形。
-  - `err.status` があればそのステータス、なければ 500。
-  - JSON 形式：
-    - `{ error: true, message: err.message || MSG.ERR_INTERNAL }`
+  - 例外/未捕捉エラーを 4xx/5xx に正規化して返却する最終エラーハンドリング。
 
 #### http.js
 
@@ -292,21 +288,11 @@ reading-log-app/
 
 - 役割：
   - 入力値のサニタイズ・バリデーション共通処理。
-- 主な機能：
-  - `normalizeText(value)`：NFKC 正規化＋ゼロ幅文字除去。
-  - `assertNoLink(text)`：URL/リンクっぽい文字列を検出してエラー。
-  - 書籍用：タイトル必須／総ページ数の範囲／ISBNフォーマットチェック。
-  - ログ用：累計ページが増加しているか／minutes が 0 以上の整数か／未来日でないか。
-  - Notes用：本文必須・最大文字数。
 
 #### date.js
 
 - 役割：
   - JST 基準での日付操作。
-- 主な機能：
-  - `getTodayJst()`：JSTの今日の日付（Date/文字列）。
-  - `parseYmd(str)`：`YYYY-MM-DD` 文字列 → Date。
-  - `formatYmd(date)`：Date → `YYYY/MM/DD` 形式文字列。
 
 ---
 
@@ -315,8 +301,8 @@ reading-log-app/
 #### me.js
 
 - `GET /api/me`
-  - `req.demoUser` をもとに `{ id, code, name, isReadOnly }` を返却。
-  - 実装ではデモユーザーを固定セットとして持ち、`code`（例：`demo-1`）に対応する表示名を返す。
+  - `req.demoUser` をもとに `{ id, name, isReadOnly }` を返却。
+  - 実装ではデモユーザーを固定セットとして持ち、`id`（例：`demo-1`）に対応する表示名を返す。
 
 #### books.js
 
