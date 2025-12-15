@@ -339,85 +339,65 @@ reading-log-app/
 
 ### 2.3 ルーティング層
 
-#### me.js
+#### `me.js`
 
-- `GET /api/me`
-  - `req.demoUser` をもとに `{ id, name, isReadOnly }` を返却。
-  - 実装ではデモユーザーを固定セットとして持ち、`id`（例：`demo-1`）に対応する表示名を返す。
+- 役割：
+  - デモユーザー情報を返すルータ。
+  - `DEMO_USERS`（固定マップ）から `req.demoUser`（文字列）に対応するユーザーを選び、なければ `demo-1` を返す。
+- エンドポイント（`app.use('/api/me', meRouter)` 前提）：
+  - `GET /api/me`
+    - レスポンス：`{ data: { id, name, isReadOnly } }`
 
-#### books.js
+#### `books.js`
 
-- ベースパス：`/api/books`
-- ルート：
-  - `GET /api/books`
-    - クエリ：
-      - `q`（任意：タイトル・著者の部分一致）
-      - `state`（任意：`reading|done`）
-    - 処理：
-      - `bookController.listBooks`。
-  - `POST /api/books`
-    - ミドルウェア：`readonlyGuard`
-    - ボディ：
-      - `{ title, totalPages, author?, publisher?, isbn? }`
-    - 処理：
-      - `bookController.createBook`。
-  - `GET /api/books/:bookId`
-    - 処理：
-      - `bookController.getBookDetail`。
-  - `PATCH /api/books/:bookId`
-    - ミドルウェア：`readonlyGuard`
-    - 処理：
-      - `bookController.updateBook`。
-  - `DELETE /api/books/:bookId`
-    - ミドルウェア：`readonlyGuard`
-    - 処理：
-      - `bookController.softDeleteBook`。
+- 役割：
+  - 書籍APIのルーティング定義（Controllerへ委譲）。
+- エンドポイント（`app.use('/api/books', booksRouter)` 前提）：
+  - `GET /api/books` → `bookController.listBooks`
+  - `GET /api/books/:id` → `bookController.getBook`
+  - `POST /api/books` → `bookController.createBook`
+  - `PATCH /api/books/:id` → `bookController.updateBook`
+  - `DELETE /api/books/:id` → `bookController.softDeleteBook`
 
-#### logs.js
+#### `logs.js`
 
-- ベースパス：`/api/books/:bookId/logs`
-- ルート：
-  - `GET /api/books/:bookId/logs`
-    - 処理：`logController.listLogs`。
-  - `POST /api/books/:bookId/logs`
-    - ミドルウェア：`readonlyGuard`
-    - ボディ：
-      - `{ cumulativePages, minutes?, dateJst?, memo? }`
-    - 処理：`logController.createLog`。
-  - `DELETE /api/books/:bookId/logs/latest`
-    - ミドルウェア：`readonlyGuard`
-    - 処理：`logController.deleteLatestLog`（Undo）。
+- 役割：
+  - 読書ログAPIのルーティング定義（Controllerへ委譲）。
+- エンドポイント（`app.use('/api/books', logsRouter)` 前提）：
+  - `GET /api/books/:id/logs` → `logController.listLogs`
+  - `POST /api/books/:id/logs` → `logController.createLog`
+  - `DELETE /api/books/:id/logs/last` → `logController.deleteLatestLog`
+- 補足：
+  - ルートパラメータは `:id`（bookId）として扱う。
 
-#### notes.js
+#### `notes.js`
 
-- ベースパス：`/api/books/:bookId/notes`, `/api/notes/:noteId`
-- ルート：
-  - `GET /api/books/:bookId/notes`
-    - 処理：`noteController.listNotes`。
-  - `POST /api/books/:bookId/notes`
-    - ミドルウェア：`readonlyGuard`
-    - ボディ：`{ body }`
-  - `GET /api/notes/:noteId`
-    - 処理：`noteController.getNote`。
-  - `PATCH /api/notes/:noteId`
-    - ミドルウェア：`readonlyGuard`
-    - ボディ：`{ body }`
-  - `DELETE /api/notes/:noteId`
-    - ミドルウェア：`readonlyGuard`
+- 役割：
+  - Notesのルーティング定義（booksスコープ / notesスコープを同一Routerで扱う）。
+- エンドポイント（`app.use('/api', notesRouter)` 前提）：
+  - booksスコープ
+    - `GET /api/books/:bookId/notes` → `noteController.listNotes`
+    - `POST /api/books/:bookId/notes` → `noteController.createNote`
+  - notesスコープ
+    - `GET /api/notes/:noteId` → `noteController.getNote`
+    - `PATCH /api/notes/:noteId` → `noteController.updateNote`
+    - `DELETE /api/notes/:noteId` → `noteController.deleteNote`
 
-#### stats.js
+#### `stats.js`
 
-- ベースパス：`/api/stats`
-- ルート：
-  - `GET /api/stats/monthly`
-    - クエリ：`year`, `month`（必須）
-    - 処理：`statsController.getMonthlyStats`。
+- 役割：
+  - 統計APIのルーティング定義（Controllerへ委譲）。
+- エンドポイント（`app.use('/api', statsRouter)` 前提）：
+  - `GET /api/stats/monthly` → `statsController.getMonthlyPages`
 
-#### health.js
+#### `health.js`
 
-- `GET /health`
-  - シンプルなヘルスチェック。
-  - 例：`{ status: 'ok' }` を返す。
+- 役割：
+  - ヘルスチェック用ルータ（疎通確認）。
+- エンドポイント（`app.use('/health', healthRouter)` 前提）：
+  - `GET /health`
+    - レスポンス：`{ ok: true, user: req.demoUser || 'demo-1' }`
+    - ※ `http` ヘルパではなく `res.json()` を直接使用。
 
 ---
 
