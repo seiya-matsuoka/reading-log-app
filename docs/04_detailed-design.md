@@ -186,30 +186,35 @@ reading-log-app/
 
 ### 2.1 エントリーポイント／アプリ構成
 
-#### index.js
+#### `index.js`
 
 - 役割：
   - `env.js` で環境変数を読み込む。
   - `app.js` から Express アプリを import。
   - `PORT`（Render が割り当て）で `app.listen`。
 
-#### app.js
+#### `app.js`
 
 - 役割：
-  - `express()` でアプリ生成。
-  - 共通ミドルウェア登録：
-    - `express.json()`
-    - `cors`（`cors.js`）
-    - `demoUser`（`demoUser.js`）
-  - ルート登録：
-    - `/health` → `health.js`
-    - `/api/me` → `me.js`
-    - `/api/books` → `books.js`
-    - `/api/books` → `logs.js`
-    - `/api` → `notes.js`
-    - `/api` → `stats.js`
-  - 最終エラーハンドラ：
-    - `errorHandler.js` を `app.use` の最後に設定。
+  - Express アプリを生成し、**共通ミドルウェア→ルータ→404→最終エラーハンドラ**の順で登録する。
+- 登録順：
+  1. `express.json()` を有効化
+  2. `cors` ミドルウェア（`./middleware/cors.js`）
+  3. `demoUser`：`req.demoUser`（文字列）と `req.isReadOnly`（boolean）を付与
+  4. `readonlyGuard`：**ReadOnlyユーザー + 書き込み系メソッド(POST/PUT/PATCH/DELETE)** を 403 にする（グローバル適用）
+  5. ルーティング：
+     - `/health` → `healthRouter`
+     - `/api/me` → `meRouter`
+     - `/api/books` → `booksRouter`
+     - `/api/books` → `logsRouter`
+     - `/api` → `notesRouter`（Router側で books / notes スコープを分岐）
+     - `/api` → `statsRouter`
+  6. 404：`http.notFound(res)` で返却（JSON）
+  7. 最終エラーハンドラ：`errorHandler`（4xx/5xxに正規化）
+- 補足：
+  - `readonlyGuard` は「書き込みルートにだけ適用」ではなく、**アプリ全体に適用され、HTTPメソッドで弾く**方式。
+
+---
 
 ### 2.2 共通モジュール
 
