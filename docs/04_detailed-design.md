@@ -1070,28 +1070,95 @@ reading-log-app/
 
 ### 3.3 共通コンポーネント
 
-- `Header.jsx`
-  - アプリ名／ナビゲーションリンク（一覧／新規書籍／ログイン／登録）。
-- `Button.jsx`
-  - バリアントと loading 状態（Spinner 内蔵）をサポート。
-- `Input.jsx`
-  - text/number/date など基本的な入力コンポーネント。
-- `Select.jsx`
-  - 状態フィルタ／ユーザー選択などに使用。
-- `Spinner.jsx`
-  - ボタン内やページローディングで利用するスピナー。
-- `SkeletonCard.jsx`
-  - 書籍カードのスケルトン版。
-  - Tailwind のカスタムクラス＋ `@keyframes shimmer` でシマーアニメーションを適用。
-- `FormFieldError.jsx`
-  - フィールド直下にバリデーションエラー文言を表示。
-- `PageLoading.jsx`
-  - 一覧／詳細の「ページレベル」のローディング表示専用。
-  - 挙動：
-    - 初期状態：通常のローディング文言（＋必要に応じて Skeleton を併用）。
-    - 一定時間（閾値：5秒）経過：
-      - 「サーバ起動に時間がかかっている可能性」を説明する文言。
-      - 大きめのスピナー。
+#### `Header.jsx`
+
+- 役割：
+  - 画面上部のヘッダー（アプリ名、ナビゲーション、現在ユーザー表示）。
+- 依存：
+  - `useMe()`（Context）から `me` を取得しユーザー表示に反映。
+- ナビゲーション：
+  - `NavLink` でアクティブ時のスタイルを切替（`linkActive`）。
+  - タブ：
+    - `/books`（一覧）
+    - `/books/new`（新規書籍）
+    - `/login`
+    - `/register`
+- レスポンシブ：
+  - md未満：上段にアプリ名＋ユーザー情報、下段に横スクロールタブ。
+  - md以上：左にアプリ名、右にタブ＋ユーザー情報。
+
+#### `Button.jsx`
+
+- 役割：
+  - ボタン共通コンポーネント（variant、loading、disabled を統一）。
+- Props：
+  - `variant`：`primary | ghost | destructive`（デフォルト `primary`）。
+  - `loading`：true の間は Spinner を表示し `disabled` 扱い。
+  - `disabled`：明示無効化。
+- 表示：
+  - `loading` のとき `<Spinner />` を先頭に表示（子要素がある場合は `mr-2`）。
+- スタイル：
+  - `ghost`：surface系＋枠線
+  - `destructive`：danger系
+  - `primary`：primaryの塗り（`bg-primary-600 text-white`）
+
+#### `Input.jsx`
+
+- 役割：
+  - input の共通スタイル適用コンポーネント。
+- 特徴：
+  - 通常状態：`bg-surface border-border ...`
+  - focus：`focus:ring-primary-100 ...`
+  - disabled：`disabled:bg-surface-1 disabled:text-muted ...`
+
+#### `Select.jsx`
+
+- 役割：
+  - select の共通スタイル適用コンポーネント。
+- 特徴：
+  - `bg-surface border-border ...` を付与し、`children` をそのまま描画。
+
+#### `Spinner.jsx`
+
+- 役割：ローディング表示用の共通スピナー。
+- Props：
+  - `className`：外側の `svg` に付与する追加クラス（デフォルト `''`）。
+- 実装概要：
+  - `animate-spin` で回転。
+  - `circle`（薄い輪）＋ `path`（濃い欠けた輪）で表現。
+
+#### `SkeletonCard.jsx`
+
+- 役割：データ取得中に表示するスケルトンカード。
+- Props：
+  - `variant`：`'list' | 'detail'`（デフォルト `'list'`）。
+- 表示：
+  - `detail`：情報量の多いカード想定で、見出し/サブ/メタ/バー等のブロックを多めに表示。
+  - `list`：一覧用に、タイトル/メタ/進捗バー/補足のブロックを表示。
+- アニメーション：
+  - 各ブロックに `animate-pulse` を付与（背景は `bg-primary-50`）。
+
+#### `FormFieldError.jsx`
+
+- 役割：フォーム項目のエラーメッセージ表示（message が無ければ何も表示しない）。
+- Props：
+  - `message`：表示する文字列。
+
+#### `PageLoading.jsx`
+
+- 役割：ページ単位のローディングUI（通常のローディング＋一定時間経過時の「遅延」説明）を提供。
+- Props：
+  - `variant`：`'list' | 'detail'`（デフォルト `'list'`）。
+  - `slowThresholdMs`：slow 表示の閾値（デフォルト 5000ms）。
+- 挙動：
+  - `slowThresholdMs` 経過後に `slow=true` とし、スピナー＋説明文（`MSG.FE.UI.LOADING.SLOW_BOOT_*`）を表示。
+  - 通常のローディング文言（`MSG.FE.UI.LOADING.DEFAULT`）は常に表示。
+  - Skeleton の枚数：
+    - `detail`：4枚（上段2＋下段2想定）
+    - `list`：6枚（2カラム×3行想定）
+- レイアウト：
+  - `detail`：`grid gap-4 md:grid-cols-2`
+  - `list`：`grid grid-cols-1 gap-4 sm:grid-cols-2`
 
 ---
 
