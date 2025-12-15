@@ -403,79 +403,137 @@ reading-log-app/
 
 ### 2.4 コントローラ層
 
-#### bookController.js
+#### `bookController.js`
 
-- `listBooks(req, res)`
-  - 入力：
-    - `req.demoUser.id`
-    - `req.query.q`, `req.query.state`
-  - 処理：
-    - サービスに検索条件を渡し、書籍リストを取得。
-  - 出力：
-    - `http.ok(res, books)`。
+- 役割：
+  - 書籍の入力バリデーション + Service呼び出し + HTTPレスポンス整形。
+- 関数：
+  - `createBook(req, res)`
+    - ReadOnly：`http.forbidden(res)`
+    - 入力（body）：`{ title, total_pages, author, publisher, isbn }`
+    - バリデーション：
+      - `title` 必須（空NG）
+      - `title/author/publisher` はリンク禁止
+      - `total_pages` は正整数（`toPositiveInt`）
+      - `isbn` は空または 10/13桁の数字のみ
+    - 成功：`http.created(res, created)`（messageはデフォルト `INFO_SAVED`）
 
-- `getBookDetail(req, res)`
-  - 入力：`bookId`
-  - 処理：
-    - サービスから書籍詳細を取得。
-    - 見つからない場合は `http.notFound(res, MSG.ERR_BOOK_NOT_FOUND)`。
-  - 出力：
-    - `http.ok(res, bookDetail)`。
+  - `listBooks(req, res)`
+    - クエリ：
+      - `state` は `reading|done` のみ採用、それ以外は `null`
+      - `keyword` は `trim()` して空なら `null`
+    - 成功：`http.ok(res, rows, rows.length ? undefined : MSG.INFO_NO_RESULTS)`
 
-- `createBook(req, res)`
-  - ボディのバリデーション（title, totalPages, isbn 等）。
-  - サービスで作成→ `http.created(res, createdBook, MSG.INFO_SAVED)`。
+  - `getBook(req, res)`
+    - `:id` を数値化し整数でなければ `http.bad(res)`
+    - 取得できなければ `http.notFound(res)`（messageはデフォルト）
+    - 成功：`http.ok(res, row)`
 
-- `updateBook(req, res)`
-  - ボディの部分更新（タイトル・総ページ数・著者・出版社・ISBN）。
-  - サービスで更新→ `http.ok(res, updatedBook, MSG.INFO_SAVED)`。
+  - `updateBook(req, res)`
+    - ReadOnly：`http.forbidden(res)`
+    - `:id` 整数チェック
+    - 部分更新（`undefined/null` は「未指定」として扱う）：
+      - `title`：指定時のみ必須&リンク禁止
+      - `author/publisher`：truthy時のみリンク禁止（空文字クリアは許容）
+      - `total_pages`：指定時のみ正整数チェック
+      - `isbn`：指定時のみフォーマットチェック
+    - 取得できなければ `http.notFound(res)`
+    - 成功：`http.ok(res, updated, MSG.INFO_SAVED)`
 
-- `softDeleteBook(req, res)`
-  - サービスで `deleted_at` を設定。
-  - `http.noContent(res)` もしくは `http.ok(res, {}, MSG.INFO_DELETED)`。
+  - `softDeleteBook(req, res)`
+    - ReadOnly：`http.forbidden(res)`
+    - `:id` 整数チェック
+    - 対象なし：`http.notFound(res)`
+    - 成功：`http.ok(res, { id: row.id }, MSG.INFO_DELETED)`
 
-#### logController.js
+#### `logController.js`
 
-- `listLogs(req, res)`
-  - 書籍IDを取得し、サービスからログ一覧を取得。
-  - `http.ok(res, logs)`。
+- 役割：
+  - 読書ログの入力バリデーション + Service呼び出し + エラーのHTTP変換。
+- 関数：
+  - `createLog(req, res)`
+    - ReadOnly：`http.forbidden(res)`
+    - `bookId = Number(req.params.id)`（整数チェック）
+    - 入力（body）：`{ cumulative_pages, minutes, date_jst, memo }`
+    - バリデーション：
+      - `minutes`：指定時のみ「0以上の整数」
+      - `date_jst`：形式チェック（空可）+ 指定時は「未来日NG」
+      - `memo`：指定時のみリンク禁止 + 最大500文字
+    - 成功：`http.created(res, { id: created.log.id, book: created.book }, MSG.INFO_SAVED)`
+    - 失敗：
+      - Service が `Error(MSG.*)` を投げる前提で message を見て分岐
+      - `ERR_NOT_FOUND` → `http.notFound(res, m)`
+      - `ERR_LOG_DIFF_ZERO / ERR_LOG_REVERSE / ERR_PAGES_OUT_OF_RANGE / ERR_MINUTES_OUT_OF_RANGE` → `http.bad(res, m)`
+      - その他 → `http.error(res, MSG.ERR_INTERNAL)`
 
-- `createLog(req, res)`
-  - 累計ページ・minutes・日付・メモのバリデーション。
-  - サービスで「累計→差分計算＋booksカウンタ更新＋log挿入」をトランザクションで実施。
-  - 成功時：`http.created(res, createdLog, MSG.INFO_SAVED)`。
+  - `listLogs(req, res)`
+    - `bookId` 整数チェック
+    - クエリ：`limit`/`offset` を数値化（未指定は `50/0`）
+    - 成功：`http.ok(res, rows, rows.length ? undefined : MSG.INFO_NO_RESULTS)`
 
-- `deleteLatestLog(req, res)`
-  - サービスで「直前ログの存在チェック→削除→booksの巻き戻し」を実施。
-  - 成功時：`http.ok(res, undoneInfo, MSG.INFO_UNDO_DONE)`。
-  - ログなし：`http.notFound(res, MSG.ERR_LOG_NOT_FOUND)`。
+  - `deleteLatestLog(req, res)`
+    - ReadOnly：`http.forbidden(res)`
+    - `bookId` 整数チェック
+    - 成功：`http.ok(res, { id: result.log.id, book: result.book }, MSG.INFO_UNDO_DONE)`
+    - 失敗：
+      - `ERR_NOT_FOUND` → `http.notFound(res, m)`
+      - その他 → `http.error(res, MSG.ERR_INTERNAL)`
 
-#### noteController.js
+#### `noteController.js`
 
-- `listNotes(req, res)`
-  - 書籍IDで Notes 一覧を取得。
-  - `http.ok(res, notes)`。
+- 役割：
+  - Notesの入力バリデーション + Service呼び出し + エラーのHTTP変換。
+- 関数：
+  - `createNote(req, res)`
+    - ReadOnly：`http.forbidden(res)`
+    - `bookId = Number(req.params.bookId)`（整数チェック）
+    - 入力（body）：`{ body }`
+    - バリデーション：
+      - `body` は文字列必須
+      - 最大500文字
+      - リンク禁止
+    - 成功：`http.created(res, { id: created.note.id }, MSG.INFO_SAVED)`
+    - 失敗：`ERR_NOT_FOUND` は 404、それ以外は 500
 
-- `createNote(req, res)`
-  - 本文のバリデーション（必須／長さ／リンク禁止）。
-  - サービスで追加→`http.created(res, note, MSG.INFO_SAVED)`。
+  - `listNotes(req, res)`
+    - `bookId` 整数チェック
+    - クエリ：`limit`/`offset` を数値化（未指定は `50/0`）
+    - 成功：`http.ok(res, rows, rows.length ? undefined : MSG.INFO_NO_RESULTS)`
 
-- `getNote(req, res)`
-  - `noteId` で単一ノートを取得。
-  - なければ404。
+  - `getNote(req, res)`
+    - `noteId` 整数チェック
+    - 成功：`http.ok(res, row.note)`
+    - 失敗：`ERR_NOT_FOUND` は 404、それ以外は 500
 
-- `updateNote(req, res)`
-  - 本文バリデーション→更新→`http.ok(res, note, MSG.INFO_SAVED)`。
+  - `updateNote(req, res)`
+    - ReadOnly：`http.forbidden(res)`
+    - `noteId` 整数チェック
+    - 入力（body）：`{ body }`
+    - バリデーション：
+      - `body` が `undefined` はNG（存在チェック）
+      - 文字列
+      - 最大500文字
+      - リンク禁止
+    - 成功：`http.ok(res, updated.note, MSG.INFO_SAVED)`
+    - 失敗：`ERR_NOT_FOUND` は 404、それ以外は 500
 
-- `deleteNote(req, res)`
-  - 削除→`http.ok(res, {}, MSG.INFO_DELETED)` もしくは `noContent`。
+  - `deleteNote(req, res)`
+    - ReadOnly：`http.forbidden(res)`
+    - `noteId` 整数チェック
+    - 成功：`http.ok(res, { id: result.note.id }, MSG.INFO_DELETED)`
+    - 失敗：`ERR_NOT_FOUND` は 404、それ以外は 500
 
-#### statsController.js
+#### `statsController.js`
 
-- `getMonthlyStats(req, res)`
-  - クエリの `year`, `month` を数値化・検証。
-  - サービスで月次統計を取得。
-  - `http.ok(res, stats)`。
+- 役割：
+  - 月次統計の取得（Service呼び出し + エラーのHTTP変換）。
+- 関数：
+  - `getMonthlyPages(req, res)`
+    - 入力（query）：`{ year, month }`（文字列のまま Service に渡す）
+    - 成功：`http.ok(res, result)`
+    - 失敗：
+      - `MSG.ERR_BAD_REQUEST` のみ `http.bad(res, m)`
+      - それ以外は `http.error(res, MSG.ERR_INTERNAL)`
 
 ---
 
