@@ -1164,46 +1164,104 @@ reading-log-app/
 
 ### 3.4 書籍関連コンポーネント
 
-- `BookCard.jsx`
-  - 書籍一覧用のカード。
-  - 表示内容：
-    - タイトル、著者
-    - 総ページ数／読了ページ数／進捗バー
-    - 累計読書時間（分）
-    - 最終更新日
-  - タイトルをクリックで `/books/:id` に遷移。
+#### `BookCard.jsx`
 
-- `BookForm.jsx`
-  - 新規登録／編集共通フォーム。
-  - フィールド：
-    - タイトル（必須）
-    - 総ページ数（必須）
-    - 著者、出版社、ISBN（任意）
-  - フロントバリデーション＋サーバエラー表示。
+- 役割：書籍一覧の「1冊分カード」表示。タイトル/著者/最終更新/進捗/クイック更新をまとめる。
+- Props：
+  - `book`：APIの books レコード（`total_pages`, `pages_read`, `minutes_total`, `updated_at` 等）。
+  - `onUpdated`：クイック更新保存後に一覧を再取得させるためのコールバック。
+- 進捗：
+  - `progress = read/total`（total が 0 の場合は 0% ガード）。
+  - 進捗バーは `style={{ width: \\${progress}%\ }}`。
+- 画面遷移：
+  - タイトルは `Link` で `/books/:id` に遷移。
+- 内包コンポーネント：
+  - `QuickUpdateForm` に `bookId / totalPages / onSaved` を渡して表示。
 
-- `QuickUpdateForm.jsx`
-  - 書籍一覧と詳細画面で共通利用。
-  - フィールド：
-    - 累計読了ページ数
-    - 読書時間（分）
-    - 日付（任意。未指定時は今日）
-    - 短いメモ
-  - 処理：
-    - submit → `/api/books/:id/logs` へ POST。
-    - 成功時：`api.getLastMessage()` でメッセージを取得し、トースト表示。
-    - エラー時：`err.message` or `MSG.FE.ERR.NETWORK` をフォーム上部に表示。
+#### `BookForm.jsx`
 
-- `BookNotesSection.jsx`
-  - 書籍詳細画面の左下カード。
-  - 構成：
-    - メモ追加フォーム。
-    - メモ一覧（最新順）＋編集／削除ボタン。
-  - API：
-    - `GET /api/books/:id/notes`
-    - `POST /api/books/:id/notes`
-    - `GET /api/notes/:noteId`
-    - `PATCH /api/notes/:noteId`
-    - `DELETE /api/notes/:noteId`
+- 役割：書籍の新規登録/編集で共通のフォーム（ページ側は「POST/PATCHの実行」だけ意識できる設計）。
+- Props：
+  - `mode`：`'create' | 'edit'`（デフォルト `'create'`）。
+  - `initialValues`：編集時の初期値（title/totalPages/author/publisher/isbn）。
+  - `onSubmit(values)`：バリデーション済みの `values`（API用キー：`total_pages` 等）を親へ渡す。
+  - `onCancel()`：戻るボタンの動作。
+  - `isReadOnly`：true の場合は送信不可＆注意文言を表示。
+- バリデーション：
+  - `validateBookForm(form)` を使用。
+  - blur 時に単項目＋グローバル（`_global`）も更新。
+  - ISBN は blur 時に `normalizeIsbn()` で正規化してから検証。
+- エラー表示：
+  - 項目別 `errors[field]` と、フォーム全体 `errors._global` / `submitError` を表示。
+- 送信：
+  - ReadOnly は `MSG.FE.ERR.GENERAL_READONLY` を `submitError` にセットして終了。
+  - `saving` 中はボタン disabled。送信中は `Button loading` を使用。
+
+#### `QuickUpdateForm.jsx`
+
+- 役割：一覧カード内で「読書ログ（進捗）」を素早く追加するフォーム。
+- Props：
+  - `bookId`：対象書籍ID。
+  - `totalPages`：累計ページ入力の上限チェックに使用。
+  - `onSaved()`：保存成功後に親へ通知（一覧再取得など）。
+- ReadOnly：
+  - `useMe()` の `me.isReadOnly` を参照して送信不可。
+- 初期値：
+  - `dateJst: jstToday()`（今日）。
+- バリデーション：
+  - `validateLogForm(form, { totalPages })` を使用。
+  - blur 時に単項目＋グローバル（`_global`）を更新。
+- API：
+  - `POST /api/books/:bookId/logs` に `result.values` を送信。
+- Toast：
+  - 成功時は `api.getLastMessage()` を `showToast({ type:'success', message })` で表示。
+
+#### `BookNotesSection.jsx`
+
+- 役割：書籍詳細の「メモ」セクション（notes の取得/追加/編集/削除）。
+- Props：
+  - `bookId`：対象書籍ID。
+  - `isReadOnly`：true の場合は追加/編集/削除を抑止し注意文を表示。
+- データ取得：
+  - `GET /api/books/:bookId/notes` で一覧取得し `notes` に保持。
+- 追加：
+  - `validateNoteForm(form)` を通した後、`POST /api/books/:bookId/notes`。
+  - 成功時：`api.getLastMessage()` を Toast 表示、フォームクリア、再取得。
+- 編集：
+  - `editingId / editingBody` で行単位編集を管理し、`PATCH /api/notes/:noteId`。
+- 削除：
+  - `window.confirm(MSG.FE.CONFIRM.DELETE_NOTE)` の後、`DELETE /api/notes/:noteId`。
+- 表示：
+  - ローディング中は `MSG.FE.UI.LOADING.DEFAULT` を表示。
+  - 0件時は `MSG.FE.UI.EMPTY.NOTES`。
+  - 下部にリンク禁止の注意（`MSG.FE.UI.NOTE.LINK_NOTICE`）を表示。
+
+#### `SearchBar.jsx`
+
+- 役割：書籍一覧の検索UI（キーワード＋ステータス絞り込み）。
+- Props：
+  - `keyword`, `onKeywordChange(next)`：キーワード入力の値と更新。
+  - `state`, `onStateChange(next)`：ステータス選択値と更新。
+- 構成：
+  - キーワード：`Input`（placeholder は `MSG.FE.UI.PLACEHOLDER.SEARCH`）。
+  - ステータス：`Select`（`reading/done/all`）。
+
+#### `StatsBar.jsx`
+
+- 役割：月次統計の表示＋表示月の切替（type="month"）。
+- Props：
+  - `ym`：`{ year, month }`（表示対象年月）。
+  - `onChangeYm({ year, month })`：月変更時に親へ通知。
+- データ取得：
+  - `GET /api/stats/monthly?year=...&month=...` を `useEffect` で取得。
+  - `cancelled` フラグで「古いリクエスト結果による上書き」を防止。
+- 表示分岐：
+  - loading：`MSG.FE.UI.LOADING.STATS`。
+  - error：`err.message` 優先、なければ `MSG.FE.ERR.NETWORK`。
+  - hasPages：`合計 {totalPages} ページ／1日平均 {avgPerDay} ページ`。
+  - 0ページ：`MSG.FE.UI.EMPTY.STATS`。
+- 入力制限：
+  - `max` は `formatYmd(jstToday()).slice(0, 7)` で「今月まで」に制限。
 
 ---
 
