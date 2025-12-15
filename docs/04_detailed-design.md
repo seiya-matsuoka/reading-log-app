@@ -923,60 +923,148 @@ reading-log-app/
 
 ### 3.2 コンテキスト／ライブラリ／ユーティリティ
 
-#### api.js
+#### `api.js`
 
 - 役割：
-  - バックエンド API の薄いラッパ。
-- 挙動：
-  - `VITE_API_BASE_URL` を baseURL として fetch。
-  - `X-Demo-User` ヘッダを自動付与。
-  - レスポンス JSON から
-    - `json.message` または `json.data.message` を取り出し、内部に保存。
-    - 成功時は `json.data` を返す。
-    - 失敗（`!res.ok` or `json.error`）時は `Error(message)` を throw。
-  - `api.getLastMessage()` で最後に受け取った `message` を取り出せる。
+  - `fetch` の薄いラッパ。baseURL、共通ヘッダー、エラーハンドリング、直近 message の保持を担う。
+- ベースURL：
+  - `VITE_API_BASE_URL` を優先し、未設定時は `http://localhost:3001`。
+- ヘッダー：
+  - `X-Demo-User` は `localStorage.demoUser` を使用（無ければ `demo-1`）。
+  - `Content-Type: application/json` を付与。
+- message の扱い：
+  - リクエスト開始時に `__lastMessage` を初期化。
+  - レスポンスJSONから `json?.message ?? json?.data?.message ?? null` を `__lastMessage` として保持。
+  - `api.getLastMessage()` で直近 message を参照可能。
+- エラー処理：
+  - ネットワーク層（fetch失敗）は `status=0` の `Error` を throw。
+  - `!res.ok` または `json?.error` のとき、`__lastMessage`（無ければ `HTTP {status}`）で `Error` を throw（`e.status` と `e.payload` も付与）。
+- 成功時：
+  - `json?.data ?? null` を返す（呼び出し側は data のみ受け取る）。
+- 公開API：
+  - `api.get/post/patch/delete`（内部で `request()` を呼ぶ）＋ `getLastMessage()`。
 
-#### meContext.jsx
-
-- 役割：
-  - 現在のデモユーザー情報（`/api/me`）を保持。
-  - ログイン画面でユーザー切り替えが行われた際、`X-Demo-User` に反映。
-
-#### toastContext.js / ToastProvider.jsx
-
-- 役割：
-  - トーストメッセージ（type: success/error/info 等）をグローバルで管理。
-  - API 成功時／失敗時にメッセージを表示。
-
-#### messages.js（Front）
+#### `meContext.jsx`
 
 - 役割：
-  - フロント専用メッセージ辞書 `MSG.FE.*`。
-- 用途：
-  - ネットワークエラー時の汎用メッセージ。
-  - Confirm ダイアログ（削除確認など）。
-  - 画面固有のラベル・説明文・空状態メッセージ。
-- 方針：
-  - サーバ側 `MSG` と重複する文言は原則持たず、  
-    「UIラベル」や「ネットワークエラー」などのみ保持する。
+  - 「現在のデモユーザー（me）」の取得・保持・切替を Context として提供する。
+- 管理する状態：
+  - `me`：`/api/me` の結果（取得失敗時は `null`）。
+  - `loading`：取得中フラグ。
+- 初期化：
+  - 初回マウント時、`localStorage.demoUser` が無ければ `demo-1` をセットしてから `fetchMe()`。
+- 関数：
+  - `fetchMe()`：`api.get('/api/me')` を呼び `me` を更新（失敗時は `me=null`、警告ログのみ）。
+  - `reload()`：`loading=true` → `fetchMe()`。
+  - `loginAs(user)`：`localStorage.demoUser=user` → `reload()`（デモユーザー切替）。
+- 付加情報：
+  - `isReadOnly: !!me?.isReadOnly`（`me` が `null` の間も false）。
+- 利用：
+  - `useMe()` で Context を参照。
 
-#### date.js（Front）
-
-- 役割：
-  - Date → 表示用文字列 `YYYY/MM/DD` の変換。
-  - 必要に応じて `YYYY-MM-DD` 入力用の変換。
-
-#### validation.js（Front）
-
-- 役割：
-  - クライアント側バリデーション。
-  - サーバと同じルールを可能な範囲で再現（タイトル必須、総ページ数範囲、ISBNフォーマット等）。
-
-#### sanitize.js
+#### `toastContext.js`
 
 - 役割：
-  - テキストの NFKC 正規化／ゼロ幅文字除去。
-  - URL/リンクの検知（`://`, `www.`, 一部短縮URL）を行い、NG の場合はエラーとして扱う。
+  - トースト表示用の Context と、それを取得する `useToast()` フックを定義する。
+- 提供：
+  - `ToastContext`：`createContext(null)` で作成。
+  - `useToast()`：
+    - `ToastProvider` 配下以外で呼ばれた場合は例外を投げる（開発時の誤使用検知）。
+
+#### `ToastProvider.jsx`
+
+- 役割：
+  - アプリ全体で使えるグローバルトーストを提供する Provider。
+- 管理する状態：
+  - `toasts`：画面に表示中の `{ id, type, message }` 配列。
+- 提供する関数：
+  - `showToast({ type='success', message })`
+    - `message` が falsy の場合は何もしない。
+    - `id` は `${Date.now()}-${Math.random()}` で生成。
+    - 自動クローズ：
+      - `type === 'error'` は 5000ms
+      - それ以外は 3000ms
+- 表示：
+  - 画面上部に fixed で重ね表示（PCは右寄せ、モバイルは中央寄せ）。
+  - 色分け：
+    - error：`border-danger-100 bg-danger-50 text-danger-600`
+    - success系：`border-primary-100 bg-primary-50 text-primary-600`
+
+#### `messages.js`（Front）
+
+- 役割：
+  - **フロントエンド専用**のメッセージ定義。
+  - サーバ由来メッセージは重複定義せず、そのまま表示する方針。
+- 構造：
+  - `MSG.FE.ERR`：フロント側の通信/予期せぬエラー・画面固有エラー・Readonly等。
+  - `MSG.FE.ERR.VALID`：クライアント側バリデーション文言（Books/Logs/Notes）。
+  - `MSG.FE.UI`：説明文、空状態、プレースホルダ、ローディング文言。
+  - `MSG.FE.CONFIRM`：confirmダイアログ文言。
+  - `MSG.FE.INFO`：クライアント側のinfo文言。
+
+#### `date.js`（Front）
+
+- 役割：
+  - フロントで使用する日付ユーティリティ。
+- 関数：
+  - `jstToday()`
+    - `Asia/Tokyo` の本日を `YYYY-MM-DD` 形式で返す。
+  - `formatYmd(date)`
+    - `Date` または日付文字列を受け取り `YYYY/MM/DD` に整形して返す。
+
+#### `validation.js`（Front）
+
+- 役割：
+  - フロント側フォーム入力のバリデーションと、APIへ送る値の正規化を担当する。
+- 依存：
+  - `sanitizeInput / hasLink`：`sanitize.js` を使用。
+  - メッセージ：`MSG`。
+  - 日付：`jstToday()`（未来日チェック）。
+- 低レベル関数：
+  - `toPositiveInt(value)`：1以上の整数なら number、それ以外は `null`。
+  - `normalizeIsbn(value)`：NFKC + ゼロ幅除去 + 数字以外除去で「数字列」に正規化。
+  - `isValidIsbnOrEmpty(value)`：空OK、10桁 or 13桁のみOK。
+- フォーム単位の関数：
+  - `validateBookForm(form)`
+    - title 必須、totalPages 必須＆正整数、リンク禁止（title/author/publisher）、ISBN形式チェック。
+    - 返却：`{ ok, errors, values }`（`values` は API 用キー `total_pages` などに整形）。
+  - `validateLogForm(form, { totalPages } = {})`
+    - `cumulativePages`：整数＆0以上＆総ページ以下
+    - `minutes`：整数＆0以上（未入力は 0）
+    - `dateJst`：`YYYY-MM-DD` 形式＆未来日禁止
+    - `memo`：500文字以内＆リンク禁止
+    - 返却：`{ ok, errors, values }`（`cumulative_pages` 等に整形）。
+  - `validateNoteForm(form)`
+    - body 必須、500文字以内、リンク禁止。
+    - 返却：`{ ok, errors, values }`。
+
+#### `sanitize.js`
+
+- 役割：
+  - 入力サニタイズとリンク検出のユーティリティ。
+- 内容：
+  - `nfkc(s)`：`normalize('NFKC')` でUnicode正規化。
+  - `stripZeroWidth(s)`：ゼロ幅文字を除去。
+  - `hasLink(s)`：`https?://` / `ftp://` / `www.` を含むか（大文字小文字無視）。
+  - `sanitizeInput(s)`：`nfkc` → `stripZeroWidth` の順で正規化。
+
+#### `tailwind.css`
+
+- 役割：
+  - Tailwind の読み込みと、アプリ共通のデザイントークン（CSS変数）・ユーティリティCSSを定義する。
+- Tailwind：
+  - `@import 'tailwindcss';` を使用。
+- トークン定義（`@theme`）：
+  - ベース：`bg/bg-surface/...`、`text/text-muted`、`border` 等のカラートークン。
+  - primary：`primary-50/100/500/600` を定義。
+  - danger：`danger-50/100/500/600` と、`--color-destructive` を定義。
+  - 角丸：`--radius: 0.75rem;`（`rounded-(--radius)` で使用）。
+- デフォルトテーマ（`:root`）：
+  - 淡いブルー基調の `--c-*` を定義し、`@theme` の `--color-*` から参照する。
+- 追加CSS：
+  - `.container` の max-width を 72rem に調整。
+  - `.skeleton-card` の shimmer エフェクト：
+    - `::after` に gradient を重ね、`@keyframes shimmer` で横方向に移動。
 
 ---
 
