@@ -539,66 +539,102 @@ reading-log-app/
 
 ### 2.5 サービス層
 
-#### bookService.js
+#### `bookService.js`
 
-- `listBooks({ userId, q, state })`
-  - `bookRepository.listBooks` 呼び出し。
-  - title/author 検索は lowercase + `%q%` の部分一致。
+- 役割：
+  - Book に関するビジネスロジック層（ただし多くは Repository への薄い委譲）。
+- 関数：
+  - `createBook(input)`
+    - `bookRepository.createBook(input)` にそのまま委譲。
 
-- `getBookDetail({ userId, bookId })`
-  - `bookRepository.getBook`。
-  - 必要に応じてログ・メモ数などを付加するのは repository or SQL 側。
+  - `listBooks(input)`
+    - `bookRepository.listBooks(input)` にそのまま委譲。
 
-- `createBook(input)`
-  - バリデーション（validation.js）→ `bookRepository.insertBook`。
+  - `getBook(input)`
+    - `bookRepository.getBook(input)` にそのまま委譲。
 
-- `updateBook({ bookId, userId, patch })`
-  - 存在チェック → バリデーション → `bookRepository.updateBook`。
+  - `updateBook(input)`
+    - `id,userId` をキーに `bookRepository.getBook({ id, userId })` で現行データを取得し、存在しなければ `null` を返す（例外は投げない）。
+    - 更新値の決定ルール：
+      - `undefined`：現行値を採用
+      - `""`（空文字）：`null` としてクリア（author/publisher/isbnのみ）
+      - それ以外：指定値を採用
+    - `updateInput` を **undefined を含まない形** に整形して `bookRepository.updateBook(updateInput)` を呼ぶ。
 
-- `softDeleteBook({ bookId, userId })`
-  - 存在チェック → `bookRepository.softDeleteBook`。
+  - `softDeleteBook(input)`
+    - `bookRepository.softDeleteBook(input)` にそのまま委譲。
 
-#### logService.js
+#### `logService.js`
 
-- `listLogs({ userId, bookId })`
-  - `logRepository.listLogs` を呼び出し。
+- 役割：
+  - 読書ログの作成/一覧/Undo（直近削除）と、それに伴う **books のカウンタ更新** を担う。
+- 関数：
+  - `createLog(input)`
+    - 入力：`{ bookId, userId, cumulativePages, minutes = 0, dateJst = null, memo = null }`
+    - `bookRepository.getBookCounters({ id: bookId, userId })` で現在の書籍状態を取得し、無ければ `throw new Error(MSG.ERR_NOT_FOUND)`。
+    - バリデーション：
+      - `cumulativePages`：整数、`0 <= cumulativePages <= total_pages`（範囲外は `MSG.ERR_PAGES_OUT_OF_RANGE`）
+      - `minutes`：整数、`minutes >= 0`（範囲外は `MSG.ERR_MINUTES_OUT_OF_RANGE`）
+      - 増分 `delta = cumulativePages - prevPagesRead`：
+        - `delta === 0` → `MSG.ERR_LOG_DIFF_ZERO`
+        - `delta < 0` → `MSG.ERR_LOG_REVERSE`
+    - `logRepository.createLog(...)` で logs 追加後、`bookRepository.updateBookCounters(...)` で books を更新：
+      - `pagesRead`：`Number(cumulativePages)`
+      - `minutesTotal`：`(book.minutes_total || 0) + (createdLog.minutes || 0)`
+    - 戻り値：`{ log: createdLog, book: updatedBook, deltaPages: delta }`
 
-- `createLog({ userId, bookId, cumulativePages, minutes, dateJst, memo })`
-  - 正規化・バリデーション。
-  - トランザクション内で：
-    1. `logRepository.getLatestLog` で直前の累計ページを取得。
-    2. `delta = cumulativePages - latest.cumulativePages` を計算。
-       - `delta <= 0` の場合はエラー（`MSG.ERR_CUMULATIVE_NOT_INCREASED`）。
-    3. `logRepository.insertLog` で新規ログ追加。
-    4. `bookRepository.updateBookCounters` で
-       - `pages_read = min(total_pages, cumulativePages)`
-       - `minutes_total += minutes || 0`
-       - `state` 自動判定（`reading`/`done`）。
-  - 完了後、作成されたログ情報を返す。
+  - `listLogs(input)`
+    - `logRepository.listLogs(input)` にそのまま委譲。
 
-- `deleteLatestLog({ userId, bookId })`
-  - トランザクション内で：
-    1. `logRepository.getLatestLog` で最新ログを取得（なければエラー）。
-    2. `logRepository.deleteLatestLog` で削除。
-    3. `bookRepository.getBookCountersFromLogs` で logs テーブルから再集計。
-    4. `bookRepository.updateBookCounters` で books に反映。
-  - 巻き戻し後の `pages_read`／`minutes_total` などを返す。
+  - `deleteLatestLog(input)`
+    - 入力：`{ bookId, userId }`
+    - `bookRepository.getBookCounters(...)` で books 存在チェック（無ければ `MSG.ERR_NOT_FOUND`）。
+    - `logRepository.deleteLatestLog({ bookId, userId })` で直近1件を削除し、削除できなければ `MSG.ERR_NOT_FOUND`。
+    - 削除後のカウンタ算出：
+      - `newPagesRead`：`logRepository.getLatestLog(...)` の残存最新ログの `cumulative_pages`（無ければ 0）
+      - `newMinutesTotal`：`book.minutes_total - deletedLog.minutes` を 0 未満にならないよう `Math.max(0, ...)`
+    - `bookRepository.updateBookCounters(...)` で books を更新し、`{ log: deletedLog, book: updatedBook }` を返す。
 
-#### noteService.js
+#### `noteService.js`
 
-- `listNotes({ userId, bookId })`
-- `createNote({ userId, bookId, body })`
-- `getNote({ userId, noteId })`
-- `updateNote({ userId, noteId, body })`
-- `deleteNote({ userId, noteId })`
+- 役割：
+  - Notes の CRUD と、作成時の **books 存在チェック** を担う。
+- 関数：
+  - `createNote(input)`
+    - 入力：`{ bookId, userId, body }`
+    - `bookRepository.getBook({ id: bookId, userId })` で books の存在チェック（無ければ `throw new Error(MSG.ERR_NOT_FOUND)`）。
+    - `noteRepository.createNote({ bookId, userId, body })` を実行し、戻り値は `{ note: createdNote }`。
 
-→ いずれも validation.js で本文をチェックした上で、noteRepository に委譲。
+  - `listNotes(input)`
+    - `noteRepository.listNotes(input)` にそのまま委譲。
 
-#### statsService.js
+  - `getNote(input)`
+    - `noteRepository.getNote(input)` の結果が無ければ `MSG.ERR_NOT_FOUND` を throw、あれば `{ note }` を返す。
 
-- `getMonthlyStats({ userId, year, month })`
-  - `statsRepository.getMonthlyPages` を呼び出し。
-  - 返り値から `{ year, month, totalPages, avgPerDay }` などの構造を組み立てる。
+  - `updateNote(input)`
+    - `noteRepository.updateNote(input)` の結果が無ければ `MSG.ERR_NOT_FOUND` を throw、あれば `{ note: updatedNote }` を返す。
+
+  - `deleteNote(input)`
+    - `noteRepository.deleteNote(input)` の結果が無ければ `MSG.ERR_NOT_FOUND` を throw、あれば `{ note: deletedNote }` を返す。
+
+#### `statsService.js`
+
+- 役割：
+  - 月次統計（合計ページ、平均など）を算出して返す。
+- 関数：
+  - `getMonthlyPages({ userId, year, month })`
+    - `today = jstToday()` を取得し、year/month 未指定の場合は **今月** をデフォルトにする。
+      - `y`：`year` が整数なら採用、そうでなければ `today.getFullYear()`
+      - `m`：`month` が整数なら採用、そうでなければ `today.getMonth() + 1`
+    - 範囲チェック：
+      - `1970 <= y <= 2100` かつ `1 <= m <= 12` を満たさなければ `throw new Error(MSG.ERR_BAD_REQUEST)`。
+    - `statsRepository.getMonthlyPages({ userId, year: y, month: m })` を呼び、`totalPages` を取得。
+    - 平均の分母 `denom`：
+      - 今月：`today.getDate()`
+      - 過去月：`daysInMonth(y, m)`
+    - `avgPerDay`：
+      - `Math.round((totalPages / denom) * 10) / 10`（小数第1位で四捨五入）。
+    - 戻り値：`{ year: y, month: m, totalPages, avgPerDay, days: denom }`
 
 ---
 
