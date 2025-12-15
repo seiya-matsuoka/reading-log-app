@@ -638,62 +638,116 @@ reading-log-app/
 
 ---
 
-### 2.6 リポジトリ層 & SQL
+### 2.6 リポジトリ層
 
 各リポジトリは `.sql` ファイルを読み込み、`pool.query` で実行する想定。
 
-#### bookRepository.js
+#### `bookRepository.js`
 
-- 利用SQL：
-  - `list_books.sql`
-  - `get_book.sql`
-  - `insert_book.sql`
-  - `update_book.sql`
-  - `soft_delete_book.sql`
-  - `get_book_counters.sql`
-  - `update_book_counters.sql`
-- 主な関数：
-  - `listBooks({ userId, q, state })`
-  - `getBook({ userId, bookId })`
-  - `insertBook(input)`
-  - `updateBook({ userId, bookId, patch })`
-  - `softDeleteBook({ userId, bookId })`
-  - `getBookCounters({ userId, bookId })`
-  - `updateBookCounters({ userId, bookId, pagesRead, minutesTotal, state })`
+- 役割：
+  - Books テーブルに対する DB アクセス（生SQL）を担当する Repository。
+  - `backend/sql/queries/books` 配下の SQL を `fs.readFileSync` で読み込み、`pool.query()` で実行する。
+- SQLの読み込み：
+  - `SQL_DIR = backend/sql/queries/books` を基準に、以下を読み込む。
+    - `insert_book.sql`
+    - `list_books.sql`
+    - `get_book.sql`
+    - `update_book.sql`
+    - `soft_delete_book.sql`
+    - `get_book_counters.sql`
+    - `update_book_counters.sql`
+- 関数：
+  - `createBook({ userId, title, totalPages, author, publisher, isbn })`
+    - `author/publisher/isbn` は未指定時 `null` に正規化して INSERT。
+    - `insert_book.sql` を実行し、作成した book のレコードを返す。
 
-#### logRepository.js
+  - `listBooks({ userId, state, keyword })`
+    - `state/keyword` は未指定時 `null` としてクエリに渡す。
+    - `list_books.sql` を実行し、条件に合う books の配列を返す。
 
-- 利用SQL：
-  - `list_logs.sql`
-  - `get_latest_log.sql`
-  - `insert_log.sql`
-  - `delete_latest_log.sql`
-- 主な関数：
-  - `listLogsByBook({ userId, bookId })`
-  - `getLatestLog({ userId, bookId })`
-  - `insertLog({ userId, bookId, ... })`
-  - `deleteLatestLog({ userId, bookId })`
+  - `getBook({ id, userId })`
+    - `get_book.sql` を実行し、該当があれば1件、なければ `null` を返す。
 
-#### noteRepository.js
+  - `updateBook({ id, userId, title, totalPages, author, publisher, isbn })`
+    - Service 側で **undefined を含まない形に整形済み** という前提でそのまま更新SQLを実行する。
+    - `update_book.sql` を実行し、更新後の book を返す（該当なしは `null`）。
 
-- 利用SQL：
-  - `list_notes.sql`
-  - `insert_note.sql`
-  - `get_note.sql`
-  - `update_note.sql`
-  - `delete_note.sql`
-- 主な関数：
-  - `listNotesByBook({ userId, bookId })`
-  - `insertNote({ userId, bookId, body })`
-  - `getNote({ userId, noteId })`
-  - `updateNote({ userId, noteId, body })`
-  - `deleteNote({ userId, noteId })`
+  - `softDeleteBook({ id, userId })`
+    - `soft_delete_book.sql` により `deleted_at` を設定して論理削除する。
+    - RETURNING は `id` のみ。該当なしは `null`。
 
-#### statsRepository.js
+  - `getBookCounters({ id, userId })`
+    - Logs の作成/Undo に必要な最低限の項目（総ページ、pages_read、minutes_total、state 等）を取得する。
 
-- 利用SQL：
-  - `get_monthly_pages.sql`
-- 主な関数：
+  - `updateBookCounters({ id, userId, pagesRead, minutesTotal })`
+    - `pages_read` / `minutes_total` を更新し、`pagesRead >= total_pages` の場合は `state='done'` にする。
+
+#### `logRepository.js`
+
+- 役割：
+  - reading_logs（読書ログ）に対する DB アクセス（生SQL）を担当する Repository。
+  - `backend/sql/queries/logs` 配下の SQL を `fs.readFileSync` で読み込み、`pool.query()` で実行する。
+- SQLの読み込み：
+  - `SQL_DIR = backend/sql/queries/logs` を基準に、以下を読み込む。
+    - `insert_log.sql`
+    - `list_logs.sql`
+    - `get_latest_log.sql`
+    - `delete_latest_log.sql`
+- 関数：
+  - `createLog({ bookId, userId, cumulativePages, minutes, dateJst, memo })`
+    - パラメータ整形：
+      - `minutes ?? 0`
+      - `dateJst ?? null`
+      - `memo ?? null`
+    - `insert_log.sql` を実行し、作成した reading_log（1件）を返す（該当なしは `null`）。
+
+  - `listLogs({ bookId, userId, limit = 50, offset = 0 })`
+    - `list_logs.sql` を実行し、指定 book のログ一覧を返す（配列）。
+
+  - `getLatestLog({ bookId, userId })`
+    - `get_latest_log.sql` を実行し、最新ログ（1件）を返す（なければ `null`）。
+
+  - `deleteLatestLog({ bookId, userId })`
+    - `delete_latest_log.sql` を実行し、最新ログを1件削除して削除した行を返す（なければ `null`）。
+
+#### `noteRepository.js`
+
+- 役割：
+  - notes（メモ）に対する DB アクセス（生SQL）を担当する Repository。
+  - `backend/sql/queries/notes` 配下の SQL を `fs.readFileSync` で読み込み、`pool.query()` で実行する。
+- SQLの読み込み：
+  - `SQL_DIR = backend/sql/queries/notes` を基準に、以下を読み込む。
+    - `insert_note.sql`
+    - `list_notes.sql`
+    - `get_note.sql`
+    - `update_note.sql`
+    - `delete_note.sql`
+- 関数：
+  - `createNote({ bookId, userId, body })`
+    - `insert_note.sql` を実行し、作成した note（1件）を返す（なければ `null`）。
+
+  - `listNotes({ bookId, userId, limit = 50, offset = 0 })`
+    - `list_notes.sql` を実行し、指定 book の notes 一覧を返す（配列）。
+
+  - `getNote({ noteId, userId })`
+    - `get_note.sql` を実行し、該当があれば1件、なければ `null`。
+
+  - `updateNote({ noteId, userId, body })`
+    - `update_note.sql` を実行し、更新後の note を返す（該当なしは `null`）。
+
+  - `deleteNote({ noteId, userId })`
+    - `delete_note.sql` を実行し、削除した note を返す（該当なしは `null`）。
+
+#### `statsRepository.js`
+
+- 役割：
+  - 月次統計（指定年月に読んだページ数合計）に関する DB アクセス（生SQL）を担当する Repository。
+  - `backend/sql/queries/stats/get_monthly_pages.sql` を `fs.readFileSync` で読み込み、`pool.query()` で実行する。
+- SQLの読み込み：
+  - `SQL_DIR = backend/sql/queries/stats`
+  - 読み込むSQL：
+    - `get_monthly_pages.sql`
+- 関数：
   - `getMonthlyPages({ userId, year, month })`
     - JST 基準の月境界でページ数を集計し、日数や読書日数も返す想定。
 
