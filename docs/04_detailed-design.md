@@ -881,30 +881,43 @@ reading-log-app/
 
 ### 3.1 アプリケーション構成
 
-#### main.jsx
+#### `main.jsx`
 
 - 役割：
-  - `ReactDOM.createRoot` で `App` をマウント。
-  - `BrowserRouter` でルーティングを提供。
-  - `MeProvider`（meContext）と `ToastProvider` をラップ。
+  - React アプリの起動エントリ。
+  - グローバルな Provider を最上位で組み立てる。
+- 主な処理：
+  - `createRoot(...).render(...)` で描画開始。
+  - ルーティング：`BrowserRouter` を適用。
+  - 通知：`ToastProvider` を適用。
+  - デモユーザー状態：`MeProvider` を適用。
+  - スタイル：`./styles/tailwind.css` を読み込み。
 
-#### App.jsx
+#### `App.jsx`
 
 - 役割：
-  - 共通レイアウト（Header＋mainコンテンツ）を構築。
-  - `AppRoutes` コンポーネント（`routes.jsx`）を配置。
+  - 画面全体の共通レイアウト（ヘッダー＋メイン領域）を定義する最上位コンポーネント。
+- 構成：
+  - `<Header />` を常設。
+  - `<main>` 内で `<AppRoutes />` を描画（ページ切り替え）。
+- スタイル：
+  - `bg-bg text-text min-h-screen` のベース背景/文字色/最小高などを付与。
+  - コンテンツ幅：`container mx-auto max-w-5xl px-4 py-6`。
 
-#### routes.jsx
+#### `routes.jsx`
 
 - 役割：
-  - ルート定義。
-- マッピング：
-  - `/login` → `Login`
-  - `/register` → `Register`
-  - `/books` → `BooksList`
-  - `/books/new` → `BookNew`
-  - `/books/:id` → `BookDetail`
-  - `*` → `NotFound`
+  - React Router のルート定義を集約し、URL→ページコンポーネントの対応を提供する。
+- 実装：
+  - `useRoutes()` でルート配列を定義し、`AppRoutes()` がそれを返す。
+- ルーティング一覧：
+  - `/` → `/books` にリダイレクト（`<Navigate ... replace />`）。
+  - `/login` → `Login`。
+  - `/register` → `Register`。
+  - `/books` → `BooksList`。
+  - `/books/new` → `BookNew`。
+  - `/books/:id` → `BookDetail`。
+  - `*` → `NotFound`（フォールバック）。
 
 ---
 
