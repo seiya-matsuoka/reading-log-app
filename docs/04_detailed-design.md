@@ -864,14 +864,14 @@ reading-log-app/
 
 #### マイグレーション & シード
 
-- `0000_reset_all.sql`
-  - 全テーブル truncate／drop 等で初期化。
 - `0001_init.sql`
   - `users`, `books`, `reading_logs`, `notes` のテーブル定義。
+- `0000_reset_all.sql`
+  - 全テーブル truncate で初期化。
 - `0001_demo_users.sql`〜`0004_demo_notes.sql`
   - デモユーザー／書籍／ログ／メモの投入。
 - `migrate.js`
-  - 上記 SQL を適用する Node スクリプト。
+  - マイグレーション用 SQL を適用する Node スクリプト。
 - `seed.js`
   - デモ用 SQL を適用する Node スクリプト。
 
