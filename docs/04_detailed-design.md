@@ -749,7 +749,118 @@ reading-log-app/
     - `get_monthly_pages.sql`
 - 関数：
   - `getMonthlyPages({ userId, year, month })`
-    - JST 基準の月境界でページ数を集計し、日数や読書日数も返す想定。
+    - `pool.query(q.getMonthlyPages, [userId, year, month])` を実行。
+    - 返却は `{ totalPages: Number(rows[0]?.total_pages ?? 0) }`（数値にキャストして返す）。
+
+---
+
+### 2.7 SQL
+
+#### `backend/sql/queries/books/*.sql`（bookRepository関連）
+
+- `insert_book.sql`
+  - books に新規登録（`user_id, title, total_pages, author, publisher, isbn`）。
+  - `pages_read, minutes_total, state, created_at, updated_at` を含むレコードを RETURNING で返す。
+
+- `list_books.sql`
+  - 指定ユーザーの books を一覧取得（`deleted_at IS NULL` のみ）。
+  - `state` が指定された場合のみ `state = $2` で絞り込み（未指定は無条件）。
+  - `keyword` が指定された場合のみ `title` または `author` の部分一致（ILIKE）で絞り込み。
+  - 並び順：
+    - `reading` を先頭、`done` を後ろに寄せる。
+    - その後 `updated_at DESC`。
+
+- `get_book.sql`
+  - `id` と `user_id` で books を1件取得（`deleted_at IS NULL` のみ）。
+  - 返す項目は book の詳細一式（title/author/publisher/isbn/pages_read/minutes_total/state 等）。
+
+- `update_book.sql`
+  - book の基本情報（title/total_pages/author/publisher/isbn）を更新し `updated_at` を更新。
+  - `state` は `pages_read >= total_pages` の場合に `done`、それ以外は `reading` に補正する。
+  - 更新後の book レコード一式を RETURNING。
+
+- `soft_delete_book.sql`
+  - `deleted_at = NOW()` を設定して論理削除し、`updated_at` も更新する。
+  - RETURNING は `id` のみ。
+
+- `get_book_counters.sql`
+  - Logs の作成/Undo で必要となる「カウンタ系」中心の項目を取得する（`total_pages, pages_read, minutes_total, state` 等）。
+
+- `update_book_counters.sql`
+  - `pages_read` と `minutes_total` を更新し、`pages_read >= total_pages` の場合は `state='done'` にする。
+  - `updated_at = NOW()` を更新する。
+  - 更新後の book（カウンタ中心の項目）を RETURNING。
+
+#### `backend/sql/queries/logs/*.sql`（logRepository関連）
+
+- `insert_log.sql`
+  - reading_logs に新規ログを INSERT。
+  - `minutes` は `COALESCE($4, 0)` で未指定時 0 扱い。
+  - `date_jst` は
+    - `$5` が指定されていれば `::date` として採用
+    - 未指定なら `(NOW() AT TIME ZONE 'Asia/Tokyo')::date`（JSTの当日）を採用。
+  - INSERT 後に `id, book_id, user_id, cumulative_pages, minutes, date_jst, memo, created_at` を RETURNING。
+
+- `list_logs.sql`
+  - 指定 `book_id`・`user_id` の reading_logs を一覧取得。
+  - 並び順：
+    - `created_at DESC`
+    - 同時刻があり得るため `id DESC` を二次ソートに使用。
+  - `LIMIT $3 OFFSET $4` でページング。
+
+- `get_latest_log.sql`
+  - 指定 `book_id`・`user_id` の reading_logs のうち最新1件を取得。
+  - 並び順は `created_at DESC, id DESC`、`LIMIT 1`。
+  - 返す項目は `id, book_id, user_id, cumulative_pages, minutes, date_jst, memo, created_at`。
+
+- `delete_latest_log.sql`
+  - `latest` で最新1件の `id` を特定し、その行を DELETE する。
+  - 並び順の決定は `created_at DESC, id DESC`（最新決定ロジックは `get_latest_log.sql` と同じ）。
+  - 削除した行の `id, book_id, user_id, cumulative_pages, minutes, date_jst, memo, created_at` を RETURNING。
+
+
+#### `backend/sql/queries/notes/*.sql`（noteRepository関連）
+
+- `insert_note.sql`
+  - notes に新規メモを INSERT する。
+  - `book_id, user_id, body` を保存し、作成した行を RETURNING で返す（`id, book_id, user_id, body, created_at`）。
+
+- `list_notes.sql`
+  - 指定 `book_id`・`user_id` の notes を一覧取得する。
+  - 並び順：
+    - `created_at DESC`
+    - 同時刻があり得るため `id DESC` を二次ソートに使用。
+  - `LIMIT $3 OFFSET $4` でページング。
+
+- `get_note.sql`
+  - `id`（noteId）と `user_id` で notes を1件取得する。
+  - 返す項目は `id, book_id, user_id, body, created_at`。
+
+- `update_note.sql`
+  - `id`（noteId）と `user_id` を条件に `body` を更新する。
+  - 更新後の行を RETURNING（`id, book_id, user_id, body, created_at`）。
+
+- `delete_note.sql`
+  - `id`（noteId）と `user_id` を条件に notes を物理削除する。
+  - 削除した行を RETURNING（`id, book_id, user_id, body, created_at`）。
+
+#### `backend/sql/queries/stats/*.sql`（statsRepository関連）
+
+- `get_monthly_pages.sql`
+  - **user_id($1) の指定年月（$2=year, $3=month）に「読んだページ総数」を算出して返す**。
+  - 計算ロジック（book単位→合算）：
+    - 対象 books：
+      - `books` から `user_id = $1` かつ `deleted_at IS NULL` の書籍を対象とする。
+    - 指定月の境界（start/end）を作る：
+      - `start_date`：指定年月の1日
+      - `end_date`：`start_date + 1 month`（翌月1日）
+    - 各 book について、reading_logs から以下を求める：
+      - `before_start`：`date_jst < start_date` となるログの `cumulative_pages` の最大値（無ければ 0）
+      - `until_end`：`date_jst < end_date` となるログの `cumulative_pages` の最大値（無ければ 0）
+    - 月間の読了ページ（bookごと）：
+      - `GREATEST(0, until_end - before_start)`（マイナスは 0 扱い）
+    - 最終的に全 book 分を `SUM(...)` して `total_pages`（int）として返す。
+  - 「指定月の reading_logs の差分」ではなく、**累計（cumulative_pages）の “月初直前の最大” と “月末直前の最大” の差**で算出する方式。
 
 #### マイグレーション & シード
 
