@@ -218,7 +218,7 @@ reading-log-app/
 
 ### 2.2 共通モジュール
 
-#### env.js
+#### `env.js`
 
 - 役割：
   - `process.env` から必要な値を読み取り、最低限の検証を行う。
@@ -227,44 +227,66 @@ reading-log-app/
     - `FRONTEND_ORIGIN`
     - `NODE_ENV`
 
-#### pool.js
+#### `pool.js`
 
 - 役割：
-  - `pg` の `Pool` を生成して export。
-  - `DATABASE_URL_POOLED` を用い、TLS（`ssl: { rejectUnauthorized: false }` 等）設定。
-- 用途：
-  - Repository層から `pool.query` で利用。
+  - `pg` の `Pool` を生成して export する。
+- 接続：
+  - 環境変数 `DATABASE_URL_POOLED` を使用。
+  - SSL：`ssl: { rejectUnauthorized: false }` を指定。
 
-#### cors.js
-
-- 役割：
-  - `FRONTEND_ORIGIN` のみを `Access-Control-Allow-Origin` として許可。
-  - `Access-Control-Allow-Methods: GET,POST,PATCH,DELETE,OPTIONS`
-  - `Access-Control-Allow-Headers: Content-Type, X-Demo-User`
-
-#### demoUser.js
+#### `cors.js`
 
 - 役割：
-  - リクエストヘッダ `X-Demo-User` を参照し、未指定時は `demo-1` を既定値とする。
-  - 読み取り専用ユーザー（`demo-readonly`）の場合は `isReadOnly: true` をセット。
+  - `cors` パッケージを使った CORS ミドルウェアを export する。
+- 設定：
+  - `origin`：`process.env.FRONTEND_ORIGIN`（未指定時は `http://localhost:5173`）
+  - `methods`：`GET, POST, PATCH, DELETE, OPTIONS`
+  - `allowedHeaders`：`Content-Type`, `X-Demo-User`
+  - `credentials`：`false`
 
-#### readonlyGuard.js
-
-- 役割：
-  - 書き込み系ルートに適用されるミドルウェア。
-  - `req.demoUser.isReadOnly === true` の場合：
-    - `http.forbidden(res)` で即時レスポンス。
-- 適用箇所：
-  - Books の POST／PATCH／DELETE
-  - Logs の POST／DELETE
-  - Notes の POST／PATCH／DELETE
-
-#### errorHandler.js
+#### `demoUser.js`
 
 - 役割：
-  - 例外/未捕捉エラーを 4xx/5xx に正規化して返却する最終エラーハンドリング。
+  - ログイン機能は持たず、**デモユーザーをヘッダで切替**する。
+- 入力：
+  - `X-Demo-User` ヘッダ（未指定 or 不正値は `demo-1` 扱い）。
+- 許可値：
+  - `demo-1`, `demo-2`, `demo-3`, `demo-readonly` のみ。
+- 付与：
+  - `req.demoUser`：ユーザーID文字列（例：`demo-1`）
+  - `req.isReadOnly`：`demo-readonly` のとき `true`
 
-#### http.js
+#### `readonlyGuard.js`
+
+- 役割：
+  - ReadOnly ユーザーに対して **書き込み系HTTPメソッド** を 403 にする。
+- 判定：
+  - `req.isReadOnly === true` かつ `req.method` が `POST|PUT|PATCH|DELETE` のとき。
+- 返却：
+  - `http.forbidden(res)`。
+- 補足：
+  - ルート単位ではなく、`app.js` でグローバルに `app.use(readonlyGuard)` を適用する。
+
+#### `errorHandler.js`
+
+- 役割：
+  - **最終エラーハンドラ**として、未捕捉エラーを 4xx/5xx に正規化して返す。
+- 挙動：
+  - `res.headersSent` の場合は `next(err)` に委譲。
+  - 400：
+    - `err.type === 'entity.parse.failed'` または `err.name === 'SyntaxError'`
+    - → `http.bad(res, MSG.ERR_BAD_REQUEST)`
+  - 409：
+    - `err.code === '23505'`（unique_violation）
+    - `err.code === '23503'`（foreign_key_violation）
+    - → `http.conflict(res, MSG.ERR_CONFLICT)`
+  - その他：
+    - `http.error(res, MSG.ERR_INTERNAL)`
+- 補足：
+  - `err.status` を見て返すのではなく、**JSONパース失敗とPG制約系だけを特別扱い**する。
+
+#### `http.js`
 
 - 役割：
   - コントローラからのレスポンス生成を標準化するヘルパ。
@@ -278,7 +300,7 @@ reading-log-app/
   - `conflict(res, message)` → `409` + `{ error: true, message }`
   - `error(res, message)` → `500` + `{ error: true, message }`
 
-#### messages.js（Back）
+#### `messages.js`（Back）
 
 - 役割：
   - サーバ側メッセージの SoT。
@@ -289,15 +311,29 @@ reading-log-app/
   - `MSG.ERR_BAD_REQUEST`, `MSG.ERR_BOOK_NOT_FOUND`, `MSG.ERR_LOG_NOT_FOUND`
   - `MSG.ERR_FORBIDDEN_READONLY`, `MSG.ERR_LINK_FORBIDDEN` 等
 
-#### validation.js
+#### `validation.js`
 
 - 役割：
-  - 入力値のサニタイズ・バリデーション共通処理。
+  - テキスト/数値の軽量ユーティリティ（リンク検知、必須チェック、正整数化、ISBN形式）。
+- 提供関数：
+  - `hasLink(str)`：`https?://` または `www.` を含むか判定
+  - `isNonEmptyText(str)`：trim後に1文字以上か判定
+  - `toPositiveInt(val)`：正の整数なら数値を返し、それ以外は `null`
+  - `isValidIsbnOrEmpty(s)`：空は許可、10桁 or 13桁の数字のみ許可（ハイフン不可）
 
-#### date.js
+#### `date.js`
 
 - 役割：
-  - JST 基準での日付操作。
+  - JST日付（`YYYY-MM-DD`）のバリデーションとユーティリティ。
+- 提供関数：
+  - `isValidDateJstOrEmpty(s)`：空は許可、形式は `^\d{4}-\d{2}-\d{2}$`
+  - `isNotFutureJst(dateStr)`：
+    - `dateStrT00:00:00+09:00` を Date 化
+    - 現在日時を `Asia/Tokyo` としてローカライズし、JSTの「今日 00:00:00」と比較
+    - 未来日でなければ true
+  - `normalizeDateJstOrNull(s)`：空なら `null`、それ以外は文字列のまま返す
+  - `jstToday()`：JSTの本日（00:00:00）の Date を返す
+  - `daysInMonth(year, month)`：指定年月の日数を返す
 
 ---
 
