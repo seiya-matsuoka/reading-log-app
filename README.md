@@ -87,3 +87,42 @@
 - 読書ログの **Undo（直近ログ削除）** と、それに伴う集計値の整合性維持
 - Render コールドスタートを前提にした **段階的ローディングUI**（一定時間経過で説明を追加）
 - デモ運用のため、ユーザー識別は **`X-Demo-User` ヘッダ**で実現（ログイン画面で切替）
+
+---
+
+## REST API
+
+> 詳しい仕様は `/docs` を参照してください。
+> - 基本設計（3. REST API（Back））：[`docs/03_basic-design.md 3. REST API（Back）`](docs/03_basic-design.md#3-rest-apiback)
+> - 詳細設計（2.3 ルーティング層）：[`docs/04_detailed-design.md 2.3 ルーティング層`](docs/04_detailed-design.md#23-ルーティング層)
+
+- `GET /health`
+- `GET /api/me`
+- Books
+  - `GET /api/books`
+  - `POST /api/books`
+  - `GET /api/books/:id`
+  - `PATCH /api/books/:id`
+  - `DELETE /api/books/:id`（論理削除）
+- Logs
+  - `GET /api/books/:id/logs`
+  - `POST /api/books/:id/logs`
+  - `DELETE /api/books/:id/logs/last`（直近ログ削除）
+- Notes
+  - `GET /api/books/:id/notes`
+  - `POST /api/books/:id/notes`
+  - `GET /api/notes/:noteId`
+  - `PATCH /api/notes/:noteId`
+  - `DELETE /api/notes/:noteId`
+- Stats
+  - `GET /api/stats/monthly?year=YYYY&month=MM`
+
+---
+
+## 使い方（最小）
+
+- `/login` でデモユーザーを選択して利用します（`demo-1` など）
+- 書籍を登録すると一覧に表示され、タイトルから詳細へ遷移できます
+- 詳細または一覧カードから読書ログ（累計ページ）を追加できます
+- 直近のログは「直近ログ削除」で取り消し可能です
+- ReadOnly ユーザーでは追加・更新・削除ができません（UI抑止＋サーバ側でも拒否）
