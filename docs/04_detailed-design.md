@@ -1267,46 +1267,92 @@ reading-log-app/
 
 ### 3.5 ページコンポーネント
 
-- `Login.jsx`
-  - デモユーザー選択画面。
-  - Select で `demo-1` などを選び、ログインボタンで `meContext` を更新。
+#### `Login.jsx`
 
-- `Register.jsx`
-  - 「本アプリでは新規登録できない」旨の説明のみ表示。
+- 役割：
+  - デモ用ログイン画面（実際の認証は行わず、選択したデモユーザーを `localStorage.demoUser` に保存して切替）。
+- ユーザー選択：
+  - `OPTIONS`（`demo-1 / demo-2 / demo-3 / demo-readonly`）から選択。
+  - 初期値は `localStorage.getItem('demoUser') || 'demo-1'`。
+- 処理：
+  - submit で `loginAs(user)` → `/books` へ遷移。
+- 表示：
+  - 説明文として `MSG.FE.UI.LOGIN.HELP` / `MSG.FE.UI.DEMO.NOTICE` / `MSG.FE.UI.NOTE.LINK_NOTICE` を表示。
 
-- `BooksList.jsx`
-  - 書籍一覧画面。
-  - 構成：
-    - 検索バー（`SearchBar`）
-    - 状態フィルタ（`SearchBar`（Select））
-    - 統計バー（`StatsBar`）
-    - 一覧領域：
-      - ローディング中：SkeletonCard＋ローディング文言。
-      - エラー：エラー枠＋メッセージ。
-      - データ有：BookCard のグリッド。
-  - データ取得：
-    - 初回マウントで `/api/books`, `/api/stats/monthly` を並行取得。
-    - 取得開始から5秒以上経過したらスピナー＋専用文言を表示。
+#### `Register.jsx`
 
-- `BookNew.jsx`
-  - 新規書籍登録画面。
-  - 内部で `BookForm` を利用。
-  - 登録成功時に一覧へ遷移し、トースト表示。
+- 役割：
+  - ユーザー登録（デモ）案内ページ（実際の登録機能は持たない）。
+- 表示：
+  - タイトル「ユーザー登録（デモ）」と、補足文 `MSG.FE.UI.REGISTER.HELP` を表示するのみ。
 
-- `BookDetail.jsx`
-  - 詳細画面。レイアウトは **2行×2カラムのグリッド**。
-  - 上段左：書籍情報カード（`BookForm` 埋め込み編集／削除ボタン）。
-  - 上段右：進捗入力カード（`QuickUpdateForm`）。
-  - 下段左：メモカード（`BookNotesSection`）。
-  - 下段右：ログ履歴カード（ログ一覧＋直前ログUndoボタン）。
-  - ローディング：
-    - 初回読み込み中は Skeleton＋ローディング文言。
-    - 一定時間以上の場合はスピナー＋専用文言を表示。
-  - 読み取り専用ユーザー時は書込み系 UI を disable。
+#### `BooksList.jsx`
 
-- `NotFound.jsx`
-  - 存在しないパス時に表示。
-  - `/books` へのリンクを配置。
+- 役割：
+  - 書籍一覧ページ（検索/絞り込み、月次統計、一覧表示、ローディング・エラー・空状態）。
+- 依存：
+  - `useMe()` の `loading`（me取得が終わってから books 取得開始）。
+  - `SearchBar`：`keyword/state` をUI入力として受ける。
+  - `StatsBar`：`ym`（year/month）で月次統計を表示。
+  - `BookCard`：一覧表示のカード単位コンポーネント。
+  - `PageLoading`：ページローディング（スロー表示含む）。
+- 状態：
+  - `loading / books / error`
+  - 検索条件：`keyword`、`state`（`reading | done | all`）
+  - 統計：`ym`（初期値は `jstToday()` から `year,month` を分解）。
+- データ取得：
+  - `fetchAll()` で `GET /api/books`（`keyword` と `state!='all'` をクエリに反映）。
+- 表示分岐：
+  - `loading`：`<PageLoading variant="list" />`
+  - `error`：エラー枠＋ `MSG.FE.ERR.BOOKLIST` + エラーメッセージ表示。
+  - `books.length > 0`：2カラム（sm以上）で `BookCard` を並べる。
+  - 空：`MSG.FE.UI.EMPTY.BOOKS` と `MSG.FE.UI.BOOKLIST.HELP` を表示。
+
+#### `BookNew.jsx`
+
+- 役割：
+  - 書籍の新規登録ページ（BookFormを使い、POSTだけ担当）。
+- 処理：
+  - `BookForm` の `onSubmit` で `POST /api/books`。
+  - 成功時：`api.getLastMessage()` を Toast 表示し、`/books` へ遷移。
+- ReadOnly：
+  - `useMe().isReadOnly` を `BookForm` に渡して送信不可制御。
+
+#### `BookDetail.jsx`
+
+- 役割：
+  - 書籍詳細ページ（書籍情報の閲覧/編集/削除、進捗追加、直前ログ削除、メモ管理、ログ一覧表示）。
+- データ取得：
+  - `fetchAll()` で `GET /api/books/:id` と `GET /api/books/:id/logs` を `Promise.all` で並列取得。
+- 表示分岐：
+  - `loading`：`<PageLoading variant="detail" />`
+  - `loadError`：danger枠で表示。
+  - `book==null`：`MSG.FE.ERR.BOOKDETAIL` を表示。
+- 機能：
+  - 編集：
+    - `isEditing` 切替で `BookForm(mode='edit')` を表示。
+    - 保存：`PATCH /api/books/:id` → Toast → 再取得。
+  - ソフト削除：
+    - confirm（`MSG.FE.CONFIRM.DELETE_BOOK`）後、`DELETE /api/books/:id` → Toast → `/books` へ。
+  - 進捗追加：
+    - `QuickUpdateForm` を表示（保存後は `fetchAll`）。
+  - 直前ログ削除：
+    - confirm（`MSG.FE.CONFIRM.UNDO_LOG`）後、`DELETE /api/books/:id/logs/last` → Toast → 再取得。
+  - メモ：
+    - `BookNotesSection` に `bookId / isReadOnly` を渡す。
+  - ログ履歴表示：
+    - `logs` を `created_at DESC` の順で表示（API側がその順で取得）。
+- レイアウト：
+  - 上段：左=書籍情報（閲覧/編集） 右=進捗入力（QuickUpdateForm）
+  - 下段：左=メモ（BookNotesSection） 右=ログ履歴
+
+#### `NotFound.jsx`
+
+- 役割：
+  - 404ページ（存在しないルートのフォールバック）。
+- 表示：
+  - `MSG.FE.UI.NOT_FOUND.HELP` を補足文として表示。
+  - 「書籍一覧へ戻る」ボタンで `/books` に遷移。
 
 ---
 
