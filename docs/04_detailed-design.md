@@ -1439,24 +1439,51 @@ reading-log-app/
 
 ---
 
-### 4.3 読書ログ（Reading Logs）
+### 4.3 フロント側（フロントエンド）
 
-- cumulativePages
-  - 必須、0以上の整数。
-  - 直前ログの値より大きくない場合はエラー。
-- minutes
-  - 0以上の整数。**NULL不可（default 0）**。
-- memo
-  - 任意、最大300文字程度。
-- dateJst
-  - 必須（日付の指定がなければ内部で当日扱い）。
-  - 日本時間基準で「今日より未来でない」こと。
+#### 4.3.1 共通（sanitize / link検出）
 
-### 4.4 Notes
+- `sanitizeInput`
+  - NFKC 正規化
+  - ゼロ幅文字除去
+- `hasLink`
+  - `http(s)://` / `ftp://` / `www.` を検出してNGにする（大文字小文字無視）
 
-- body
-  - 必須、1〜500文字程度。
-  - リンク禁止。
+#### 4.3.2 Books フォーム（BookForm）
+
+- チェック内容：
+  - title 必須 + リンク禁止
+  - totalPages 必須 + 正整数
+  - author/publisher リンク禁止
+  - isbn：空OK、10/13桁のみ
+- 送信値の整形：
+  - `total_pages` など **API用キー**に変換して `onSubmit(values)` に渡す
+- ReadOnly：
+  - `isReadOnly` の場合は送信不可
+  - サーバでも最終的にブロックされる
+
+#### 4.3.3 Logs フォーム（QuickUpdateForm）
+
+- チェック内容：
+  - cumulativePages：0以上 & totalPages以下
+  - minutes：0以上の整数（未入力は 0 扱い）
+  - dateJst：`YYYY-MM-DD` 形式 & 未来日NG
+  - memo：500文字以内 & リンク禁止
+- 送信値の整形：
+  - `cumulative_pages`, `date_jst` 等に変換して送信
+- ReadOnly：
+  - `isReadOnly` の場合は送信不可
+  - サーバでも最終的にブロックされる
+
+#### 4.3.4 Notes（BookNotesSection）
+
+- チェック内容：
+  - body 必須
+  - 500文字以内
+  - リンク禁止
+- ReadOnly：
+  - `isReadOnly` の場合は送信不可
+  - サーバでも最終的にブロックされる
 
 ---
 
