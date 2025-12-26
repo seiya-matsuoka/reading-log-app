@@ -1501,18 +1501,39 @@ reading-log-app/
 
 ---
 
-### 5.2 詳細画面（BookDetail）
+### 5.2 ローディング設計（フロント）
 
-- 初回ロード：
-  - 書籍情報・ログ・メモにそれぞれ Skeleton もしくはプレースホルダを表示。
-- 5秒以上レスポンスがない場合：
-  - 「初回アクセス時はサーバ起動に時間がかかる場合があります」
-  - 「画面を閉じずにお待ちください」
-  - 大きめの Spinner。
-- 保存／更新／削除／Undo：
-  - ボタン内に Spinner を表示。
-  - 成功時：`api.getLastMessage()` をトーストで表示。
-  - エラー時：`err.message` をカード内に表示。
+#### 5.2.1 PageLoading（ページ単位）
+
+- 対象：
+  - 書籍一覧（BooksList）
+  - 書籍詳細（BookDetail）
+- 仕様：
+  - `slowThresholdMs`（デフォルト 5000ms）経過後に
+    - スピナー + 「起動待ち」説明文を追加表示
+  - `variant`
+    - `list`：一覧向けSkeleton配置
+    - `detail`：詳細レイアウト向けSkeleton配置
+- 表示内容：
+  - 通常：ローディング文言 + Skeleton
+  - slow：上記に加え「時間がかかる旨」＋スピナー
+
+#### 5.2.2 SkeletonCard / Spinner
+
+- SkeletonCard：
+  - `variant=list/detail` でブロック配置を切替
+  - ベースは `animate-pulse` + shimmer（`.skeleton-card`）
+- Spinner：
+  - 汎用の回転スピナー（ボタン内/ページ内で再利用）
+
+#### 5.2.3 パーツ単位のローディング
+
+- StatsBar：
+  - 取得中は専用文言（統計取得中）を表示
+  - 月変更時のリクエスト競合は cancelled フラグで上書き防止
+- BookNotesSection：
+  - 初期取得中はローディング文言
+  - 追加/編集/削除は実行中のボタン制御
 
 ---
 
