@@ -126,3 +126,72 @@
 - 詳細または一覧カードから読書ログ（累計ページ）を追加できます
 - 直近のログは「直近ログ削除」で取り消し可能です
 - ReadOnly ユーザーでは追加・更新・削除ができません（UI抑止＋サーバ側でも拒否）
+
+---
+
+## ローカル起動手順
+
+> コマンドは各 `package.json` の `scripts` を正とします。
+
+### 環境変数（.env）
+
+- **backend/.env**
+  - `DATABASE_URL_POOLED`：Vercel Postgres 用接続文字列
+  - `FRONTEND_ORIGIN`：CORS 許可するフロント URL（例：`http://localhost:5173`）
+  - `NODE_ENV`：`development` / `production`
+- **frontend/.env**
+  - `VITE_API_BASE_URL`：バックエンド API のベース URL（例：`http://localhost:3001` または Render のURL）
+
+### Backend（Express）
+
+```bash
+cd backend
+npm install
+
+# 開発起動
+npm run dev
+```
+
+### マイグレーション / シード
+
+```bash
+# マイグレーション
+npm run db:migrate
+
+# シード
+npm run db:seed
+
+# まとめて実行（migrate → seed）
+npm run db:setup
+```
+
+> DB は Vercel Postgres を利用する想定です。接続情報（`DATABASE_URL_POOLED`）は `backend/.env` に設定してください。
+
+### Frontend（Vite + React）
+
+```bash
+cd frontend
+npm install
+
+# 開発起動
+npm run dev
+```
+
+---
+
+## ディレクトリ構成（概要）
+
+> README では一次情報（概要）のみ記載します。  
+> **完全版のツリー・各ファイルの役割は「詳細設計」のリポジトリ構成を参照してください。**  
+> - 詳細設計（1. リポジトリ構成（実装版））：[`docs/04_detailed-design.md 1. リポジトリ構成（実装版）`](docs/04_detailed-design.md#1-リポジトリ構成実装版)
+> - 詳細設計（2. バックエンド詳細）：[`docs/04_detailed-design.md 2. バックエンド詳細`](docs/04_detailed-design.md#2-バックエンド詳細)
+> - 詳細設計（3. フロントエンド詳細）：[`docs/04_detailed-design.md 3. フロントエンド詳細`](docs/04_detailed-design.md#3-フロントエンド詳細)
+
+```txt
+.
+├─ backend/   # Express API（Repository + 生SQL）
+├─ frontend/  # Vite + React SPA
+└─ docs/      # 設計ドキュメント一式
+```
+
+---
