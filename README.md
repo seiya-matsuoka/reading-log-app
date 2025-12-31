@@ -187,7 +187,7 @@ npm run dev
 > - 詳細設計（2. バックエンド詳細）：[`docs/04_detailed-design.md 2. バックエンド詳細`](docs/04_detailed-design.md#2-バックエンド詳細)
 > - 詳細設計（3. フロントエンド詳細）：[`docs/04_detailed-design.md 3. フロントエンド詳細`](docs/04_detailed-design.md#3-フロントエンド詳細)
 
-```txt
+```bash
 .
 ├─ backend/   # Express API（Repository + 生SQL）
 ├─ frontend/  # Vite + React SPA
@@ -195,3 +195,20 @@ npm run dev
 ```
 
 ---
+
+## 設計ドキュメント
+
+設計ドキュメントは `/docs` にまとめています（README は概要のみ）。
+
+- 索引：[`docs/00_docs-index.md`](docs/00_docs-index.md)
+- 仕様まとめ：[`docs/01_spec-summary.md`](docs/01_spec-summary.md)
+- 企画・要件定義：[`docs/02_requirements.md`](docs/02_requirements.md)
+- 基本設計：[`docs/03_basic-design.md`](docs/03_basic-design.md)
+- 詳細設計：[`docs/04_detail-design.md`](docs/04_detailed-design.md)
+
+---
+
+## 補足
+
+- 本番環境では、SPA ルーティング（URL直打ち/リロード）に対応する設定を追加しています（Vercel側）。
+- デモ用途のため、実ユーザー登録・認証機構はありません。
